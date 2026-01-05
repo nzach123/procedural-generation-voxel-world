@@ -1,9 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://c5veq388pr3ei"]
+[gd_scene load_steps=14 format=3 uid="uid://c5veq388pr3ei"]
 
 [ext_resource type="Texture2D" uid="uid://r10b1gjkahn8" path="res://assets/selection.png" id="1_selection"]
-[ext_resource type="Script" uid="uid://dkehu32hlwjtg" path="res://scripts/player.gd" id="2_player"]
-[ext_resource type="Script" path="res://scripts/chunk_manager.gd" id="3_chunk_manager"]
+[ext_resource type="Script" uid="uid://dlnqyhfvgg7am" path="res://scripts/chunk_manager.gd" id="3_chunk_manager"]
+[ext_resource type="PackedScene" uid="uid://bs72ogkvdd7d6" path="res://scenes/proto_controller/proto_controller.tscn" id="4_bx44p"]
 [ext_resource type="PackedScene" uid="uid://wl78jmpmyrf2" path="res://scenes/chunk.tscn" id="4_chunk_scene"]
+[ext_resource type="Script" uid="uid://cbhxbmtgngi0h" path="res://scenes/proto_controller/proto_controller.gd" id="5_v5fa5"]
 
 [sub_resource type="GDScript" id="GDScript_root"]
 script/source = "extends Node3D
@@ -40,10 +41,6 @@ uv1_triplanar = true
 material = SubResource("StandardMaterial3D_selection")
 size = Vector3(1.02, 1.02, 1.02)
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
-radius = 0.3
-height = 1.6
-
 [sub_resource type="Gradient" id="Gradient_pointer"]
 offsets = PackedFloat32Array(0.463127, 0.469027)
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
@@ -65,29 +62,18 @@ shadow_enabled = true
 
 [node name="ChunkManager" type="Node" parent="."]
 script = ExtResource("3_chunk_manager")
-world_size = 4
-max_height = 16
-noise_scale = 0.05
 chunk_scene = ExtResource("4_chunk_scene")
-player_path = NodePath("../Player")
+player_path = NodePath("../ProtoController")
 
 [node name="CubeSelection" type="Node3D" parent="."]
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CubeSelection"]
 mesh = SubResource("BoxMesh_selection")
 
-[node name="Player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 50, 16)
-script = ExtResource("2_player")
-
-[node name="Camera3D" type="Camera3D" parent="Player"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
-
-[node name="RayCast3D" type="RayCast3D" parent="Player/Camera3D"]
-target_position = Vector3(0, 0, -5)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-shape = SubResource("CapsuleShape3D_player")
+[node name="ProtoController" parent="." instance=ExtResource("4_bx44p")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 77.44823, 0)
+script = ExtResource("5_v5fa5")
+can_sprint = true
 
 [node name="FPSLabel" type="Label" parent="."]
 anchors_preset = 1

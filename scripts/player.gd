@@ -175,4 +175,3 @@ func _initial_collision_update() -> void:
 	if chunk_manager and chunk_manager.has_method("update_collision_radius"):
 		_last_collision_update_pos = global_position
 		chunk_manager.update_collision_radius(global_position)
-
