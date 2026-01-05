@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="GrappleAbility" load_steps=2 format=3 uid="uid://d1grapple_ability"]
+
+[ext_resource type="Script" path="res://scripts/abilities/grapple_ability.gd" id="1_grapple"]
+
+[resource]
+script = ExtResource("1_grapple")
+display_name = "Grapple Hook"
+cooldown = 0.5
+interruptible = true
+max_range = 50.0
+pull_speed = 15.0
+release_distance = 2.0
+input_grapple = "grapple"
+collision_mask = 1

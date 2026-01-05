@@ -1,6 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://bs72ogkvdd7d6"]
+[gd_scene load_steps=7 format=3 uid="uid://bs72ogkvdd7d6"]
 
 [ext_resource type="Script" uid="uid://cbhxbmtgngi0h" path="res://scenes/proto_controller/proto_controller.gd" id="1_yceh1"]
+[ext_resource type="Script" uid="uid://db4kt8ll72se1" path="res://scripts/abilities/ability.gd" id="2_f6ref"]
+[ext_resource type="Resource" path="res://resources/abilities/grapple_ability.tres" id="3_n7l7r"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_iof21"]
 albedo_color = Color(0.91806, 0.575202, 0.222449, 1)
@@ -15,6 +17,7 @@ height = 1.8
 
 [node name="ProtoController" type="CharacterBody3D"]
 script = ExtResource("1_yceh1")
+ability_templates = Array[ExtResource("2_f6ref")]([ExtResource("3_n7l7r")])
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)

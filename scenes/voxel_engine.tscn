@@ -1,10 +1,11 @@
-[gd_scene load_steps=14 format=3 uid="uid://c5veq388pr3ei"]
+[gd_scene load_steps=15 format=3 uid="uid://c5veq388pr3ei"]
 
 [ext_resource type="Texture2D" uid="uid://r10b1gjkahn8" path="res://assets/selection.png" id="1_selection"]
 [ext_resource type="Script" uid="uid://dlnqyhfvgg7am" path="res://scripts/chunk_manager.gd" id="3_chunk_manager"]
 [ext_resource type="PackedScene" uid="uid://bs72ogkvdd7d6" path="res://scenes/proto_controller/proto_controller.tscn" id="4_bx44p"]
 [ext_resource type="PackedScene" uid="uid://wl78jmpmyrf2" path="res://scenes/chunk.tscn" id="4_chunk_scene"]
-[ext_resource type="Script" uid="uid://cbhxbmtgngi0h" path="res://scenes/proto_controller/proto_controller.gd" id="5_v5fa5"]
+[ext_resource type="Script" uid="uid://db4kt8ll72se1" path="res://scripts/abilities/ability.gd" id="5_v5fa5"]
+[ext_resource type="Resource" path="res://resources/abilities/grapple_ability.tres" id="6_5lfcv"]
 
 [sub_resource type="GDScript" id="GDScript_root"]
 script/source = "extends Node3D
@@ -72,8 +73,8 @@ mesh = SubResource("BoxMesh_selection")
 
 [node name="ProtoController" parent="." instance=ExtResource("4_bx44p")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 77.44823, 0)
-script = ExtResource("5_v5fa5")
 can_sprint = true
+ability_templates = Array[ExtResource("5_v5fa5")]([ExtResource("6_5lfcv")])
 
 [node name="FPSLabel" type="Label" parent="."]
 anchors_preset = 1
