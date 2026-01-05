@@ -44,6 +44,9 @@ const CHUNK_VOLUME: int = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH
 ## Enable threaded generation (disable for debugging).
 @export var use_threading: bool = true
 
+## Collision radius in chunks. Only chunks within this distance from the player get collision.
+@export var collision_radius: int = 2
+
 
 # -------------------------------------------------------------------
 # Public Variables
@@ -70,6 +73,9 @@ var _chunk_triangles: Dictionary = {}
 
 ## Pending chunk generation tasks: Vector2i -> task_id
 var _pending_chunks: Dictionary = {}
+
+## Pending chunk rebuild tasks (for deduplication): Vector2i -> true
+var _pending_rebuilds: Dictionary = {}
 
 ## Noise generator (thread-safe for read operations).
 var _noise: FastNoiseLite
@@ -111,7 +117,7 @@ func set_voxel(global_pos: Vector3, block_id: int) -> void:
 	var chunk := get_chunk(chunk_coord)
 	if chunk:
 		chunk.set_voxel(local.x, local.y, local.z, block_id)
-		chunk.build_mesh()
+		chunk.mark_dirty()
 
 
 ## Converts world position to chunk coordinate.
@@ -548,10 +554,62 @@ func _update_neighbors_at(world_coords: Vector3i) -> void:
 
 
 ## Rebuilds the mesh for a chunk if it exists.
+## Uses threaded path when use_threading is enabled, with deduplication.
 func _rebuild_chunk_at(key: Vector2i) -> void:
 	var chunk := get_chunk(key)
-	if chunk:
+	if not chunk:
+		return
+	
+	if use_threading:
+		# Deduplicate pending rebuilds
+		if _pending_rebuilds.has(key):
+			return
+		_pending_rebuilds[key] = true
+		
+		var task_data := {
+			"key": key,
+			"voxels": chunk._voxels.duplicate(),  # Copy for thread safety
+			"offset": chunk.chunk_offset,
+			"color": chunk.chunk_color
+		}
+		
+		WorkerThreadPool.add_task(
+			Callable(self, "_rebuild_chunk_task").bind(task_data)
+		)
+	else:
 		chunk.build_mesh()
+
+
+## Worker thread task: rebuilds mesh arrays for existing chunk.
+func _rebuild_chunk_task(task_data: Dictionary) -> void:
+	var key: Vector2i = task_data["key"]
+	var voxels: PackedByteArray = task_data["voxels"]
+	var offset: Vector3 = task_data["offset"]
+	var color: Color = task_data["color"]
+	
+	# Generate mesh arrays on thread
+	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, offset, color)
+	
+	var result := {
+		"key": key,
+		"mesh_data": mesh_data
+	}
+	
+	call_deferred("_apply_rebuild_data", result)
+
+
+## Main thread: applies rebuilt mesh to chunk.
+func _apply_rebuild_data(result: Dictionary) -> void:
+	var key: Vector2i = result["key"]
+	var mesh_data: Dictionary = result["mesh_data"]
+	
+	_pending_rebuilds.erase(key)
+	
+	var chunk := get_chunk(key)
+	if chunk == null:
+		return
+	
+	chunk.apply_mesh_arrays(mesh_data)
 
 
 ## Callback when a chunk mesh is updated.
@@ -569,3 +627,17 @@ func _on_chunk_mesh_updated(chunk: Chunk, triangle_count: int) -> void:
 ## Callback when a chunk requests a border update.
 func _on_border_update_requested(neighbor_key: Vector2i) -> void:
 	_rebuild_chunk_at(neighbor_key)
+
+
+## Updates which chunks have collision enabled based on proximity to position.
+## Call this from _physics_process or when player moves significantly.
+func update_collision_radius(center_pos: Vector3) -> void:
+	var center_chunk := world_to_chunk_coord(center_pos)
+	
+	for key in _chunks.keys():
+		var chunk: Chunk = _chunks[key]
+		var dist: int = maxi(absi(key.x - center_chunk.x), absi(key.y - center_chunk.y))
+		var should_have_collision: bool = dist <= collision_radius
+		
+		if chunk.is_collision_enabled() != should_have_collision:
+			chunk.set_collision_enabled(should_have_collision)

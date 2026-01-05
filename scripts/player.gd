@@ -3,6 +3,9 @@ extends CharacterBody3D
 @onready var raycast := $Camera3D/RayCast3D
 @onready var cube_selected: Node3D = $"../CubeSelection"
 
+## Reference to ChunkManager for collision radius updates.
+var chunk_manager: Node = null
+
 const SPEED = 5.0
 const JUMP_VELOCITY = 4.5
 const MOUSE_SENS = 0.002
@@ -10,9 +13,19 @@ const MOUSE_SENS = 0.002
 var _yaw = 0
 var _pitch = 0
 
+## Last position used for collision radius update (throttling).
+var _last_collision_update_pos: Vector3 = Vector3.ZERO
+
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	
+	# Find ChunkManager as sibling node
+	chunk_manager = get_node_or_null("../ChunkManager")
+	
+	# Enable collision for chunks near player on startup
+	if chunk_manager and chunk_manager.has_method("update_collision_radius"):
+		call_deferred("_initial_collision_update")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -83,6 +96,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	
 	_update_block_selection()
+	_update_collision_radius()
 
 
 
@@ -142,3 +156,23 @@ func _get_adjacent_block(point: Vector3, normal: Vector3) -> Vector3i:
 		roundi(point.y + normal.y * 0.5),
 		roundi(point.z + normal.z * 0.5)
 	)
+
+
+## Updates collision radius on ChunkManager when player moves significantly.
+func _update_collision_radius() -> void:
+	if not chunk_manager or not chunk_manager.has_method("update_collision_radius"):
+		return
+	
+	# Only update if moved more than half a chunk
+	var pos := global_position
+	if pos.distance_squared_to(_last_collision_update_pos) > 256.0:  # 16^2 = half chunk
+		_last_collision_update_pos = pos
+		chunk_manager.update_collision_radius(pos)
+
+
+## Initial collision update after scene is ready.
+func _initial_collision_update() -> void:
+	if chunk_manager and chunk_manager.has_method("update_collision_radius"):
+		_last_collision_update_pos = global_position
+		chunk_manager.update_collision_radius(global_position)
+

@@ -65,6 +65,12 @@ var _triangle_count: int = 0
 var _tiles_per_row: int = 2
 var _tile_size: float = 1.0 / 2.0
 
+## Lazy collision: only generates collision when enabled (for chunks near player).
+var _collision_enabled: bool = false
+
+## Debounce flag: batches multiple voxel changes into single mesh rebuild.
+var _mesh_dirty: bool = false
+
 
 # -------------------------------------------------------------------
 # Lifecycle
@@ -304,7 +310,7 @@ func delete_block(world_coords: Vector3i) -> void:
 		return
 	
 	set_voxel(local.x, local.y, local.z, AIR_ID)
-	build_mesh()
+	mark_dirty()
 	_check_border(local)
 
 
@@ -318,8 +324,48 @@ func add_block(world_coords: Vector3i, block_id: int = BlockDefinitions.BlockTyp
 		return
 	
 	set_voxel(local.x, local.y, local.z, block_id)
-	build_mesh()
+	mark_dirty()
 	_check_border(local)
+
+
+## Marks the chunk mesh as needing rebuild. Uses debounce to batch updates.
+func mark_dirty() -> void:
+	if _mesh_dirty:
+		return
+	_mesh_dirty = true
+	call_deferred("_flush_rebuild")
+
+
+## Flushes pending mesh rebuild (called deferred).
+## Delegates to ChunkManager for threaded execution when available.
+func _flush_rebuild() -> void:
+	if not _mesh_dirty:
+		return
+	_mesh_dirty = false
+	
+	# Use ChunkManager's threaded rebuild if available
+	if chunk_manager and chunk_manager.has_method("_rebuild_chunk_at"):
+		print("[PERF] Chunk ", key, ": Using THREADED rebuild")
+		chunk_manager._rebuild_chunk_at(key)
+	else:
+		print("[PERF] Chunk ", key, ": Using SYNC rebuild (slow!)")
+		build_mesh()
+
+
+## Enables or disables collision for this chunk (lazy collision).
+func set_collision_enabled(enabled: bool) -> void:
+	if enabled == _collision_enabled:
+		return
+	_collision_enabled = enabled
+	if enabled and _mesh_instance.mesh:
+		_build_collision()
+	elif not enabled:
+		_clear_collision()
+
+
+## Returns whether collision is enabled for this chunk.
+func is_collision_enabled() -> bool:
+	return _collision_enabled
 
 
 ## Legacy compatibility: checks if local position is air.
@@ -452,12 +498,18 @@ func _add_face_arrays(
 	indices.append(base_index + 3)
 
 
-## Builds collision shape from mesh.
+## Builds collision shape from mesh (only if collision is enabled).
 func _build_collision() -> void:
 	_clear_collision()
 	
+	if not _collision_enabled:
+		print("[PERF] Chunk ", key, ": Collision SKIPPED (disabled)")
+		return
+	
 	if _mesh_instance.mesh == null:
 		return
+	
+	var start := Time.get_ticks_msec()
 	
 	_collision_body = StaticBody3D.new()
 	var shape := _mesh_instance.mesh.create_trimesh_shape()
@@ -466,6 +518,9 @@ func _build_collision() -> void:
 	
 	_collision_body.add_child(collision_shape)
 	add_child(_collision_body)
+	
+	var elapsed := Time.get_ticks_msec() - start
+	print("[PERF] Chunk ", key, ": Collision BUILT in ", elapsed, "ms (triangles: ", _triangle_count, ")")
 
 
 ## Removes collision shape.
