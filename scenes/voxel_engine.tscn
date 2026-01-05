@@ -69,6 +69,7 @@ world_size = 4
 max_height = 16
 noise_scale = 0.05
 chunk_scene = ExtResource("4_chunk_scene")
+player_path = NodePath("../Player")
 
 [node name="CubeSelection" type="Node3D" parent="."]
 

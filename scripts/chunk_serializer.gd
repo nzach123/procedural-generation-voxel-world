@@ -104,6 +104,32 @@ static func delete_chunk(coord: Vector2i) -> void:
 		DirAccess.remove_absolute(path)
 
 
+## Saves raw voxel data to disk (thread-safe, no Chunk reference needed).
+## Used by Player Tracking Loop for background saving.
+static func save_voxels(coord: Vector2i, voxels: PackedByteArray) -> void:
+	_ensure_save_dir()
+	
+	var path: String = _get_chunk_path(coord)
+	
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("ChunkSerializer: Cannot write to %s" % path)
+		return
+	
+	# Write header
+	file.store_buffer(MAGIC.to_ascii_buffer())
+	file.store_8(VERSION)
+	file.store_32(coord.x)
+	file.store_32(coord.y)
+	
+	# Compress with RLE and write
+	var rle_data := encode_rle(voxels)
+	file.store_32(rle_data.size())
+	file.store_buffer(rle_data)
+	
+	file.close()
+
+
 # -------------------------------------------------------------------
 # RLE Compression
 # -------------------------------------------------------------------

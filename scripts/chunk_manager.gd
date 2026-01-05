@@ -47,6 +47,30 @@ const CHUNK_VOLUME: int = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH
 ## Collision radius in chunks. Only chunks within this distance from the player get collision.
 @export var collision_radius: int = 2
 
+@export_group("Infinite Scrolling")
+## Path to player node for position tracking.
+@export var player_path: NodePath
+## Resolved player reference (set in _ready).
+var player: Node3D
+## Radius of chunks to keep loaded around player.
+@export var view_distance: int = 8
+## Extra chunks beyond view_distance before unloading (hysteresis).
+@export var unload_buffer: int = 2
+## How often to check for chunk updates (seconds).
+@export var tick_rate: float = 0.5
+## Maximum concurrent chunk generation tasks.
+@export var max_concurrent_loads: int = 16
+
+@export_group("Memory Management")
+## Maximum chunks to keep loaded (prevents memory exhaustion).
+@export var max_loaded_chunks: int = 400
+
+@export_group("Origin Shifting")
+## Enable automatic origin shifting for long play sessions.
+@export var enable_origin_shifting: bool = true
+## Distance from origin before shifting world back.
+@export var origin_shift_threshold: float = 5000.0
+
 
 # -------------------------------------------------------------------
 # Public Variables
@@ -83,6 +107,30 @@ var _noise: FastNoiseLite
 ## Mutex for thread-safe chunk dictionary access.
 var _chunks_mutex: Mutex
 
+# --- Player Tracking State ---
+## Last chunk coordinate where player was (for change detection).
+var _last_player_chunk: Vector2i = Vector2i(999999, 999999)
+## Heartbeat timer for periodic chunk updates.
+var _update_timer: Timer
+
+# --- Spiral Loading (pre-computed for priority) ---
+## Offsets sorted by distance for closest-first loading.
+var _load_priority_offsets: Array[Vector2i] = []
+
+# --- Edge Remesh Queue (neighbor-triggered) ---
+## Chunks needing border remesh after neighbor loaded.
+var _edge_remesh_queue: Array[Vector2i] = []
+
+# --- Thread-Local Noise Parameters ---
+## Cached noise seed for thread-local copies.
+var _noise_seed: int
+## Cached noise frequency for thread-local copies.
+var _noise_frequency: float
+
+# --- Origin Shifting ---
+## Cumulative world origin offset for coordinate tracking.
+var _world_origin_offset: Vector3 = Vector3.ZERO
+
 
 # -------------------------------------------------------------------
 # Lifecycle
@@ -96,8 +144,30 @@ func _ready() -> void:
 	_noise.seed = 20140114
 	_noise.frequency = noise_scale
 	
-	# Generate initial world
-	_generate_initial_world()
+	# Cache noise parameters for thread-local copies
+	_noise_seed = _noise.seed
+	_noise_frequency = _noise.frequency
+	
+	# Pre-compute spiral offsets (closest chunks first)
+	_precompute_spiral_offsets()
+	
+	# Resolve player path to node reference
+	if player_path:
+		player = get_node_or_null(player_path) as Node3D
+	
+	# Initialize heartbeat timer for player tracking
+	if player:
+		_update_timer = Timer.new()
+		_update_timer.wait_time = tick_rate
+		_update_timer.autostart = true
+		_update_timer.one_shot = false
+		_update_timer.timeout.connect(_on_heartbeat)
+		add_child(_update_timer)
+		print("ChunkManager: Player tracking enabled (view_distance=%d)" % view_distance)
+	else:
+		# Legacy mode: generate static world if no player assigned
+		push_warning("ChunkManager: No player assigned, using legacy static generation")
+		_generate_initial_world()
 
 
 # -------------------------------------------------------------------
@@ -482,8 +552,9 @@ func _generate_chunk_task(task_data: Dictionary) -> void:
 	var offset: Vector3 = task_data["offset"]
 	var color: Color = task_data["color"]
 	
-	# Stage 1: Generate voxel data
-	var voxels := ChunkManager.generate_voxel_data_threaded(_noise, offset, max_height)
+	# Stage 1: Generate voxel data (using thread-local noise for safety)
+	var thread_noise := _create_thread_local_noise()
+	var voxels := ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
 	
 	# Stage 2: Generate mesh arrays
 	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, offset, color)
@@ -515,6 +586,9 @@ func _apply_chunk_data(result: Dictionary) -> void:
 	
 	# Apply mesh
 	chunk.apply_mesh_arrays(mesh_data)
+	
+	# Queue neighbor edge remeshes (fix void edge seams)
+	_queue_neighbor_edge_remesh(key)
 	
 	chunk_loaded.emit(chunk)
 
@@ -634,10 +708,264 @@ func _on_border_update_requested(neighbor_key: Vector2i) -> void:
 func update_collision_radius(center_pos: Vector3) -> void:
 	var center_chunk := world_to_chunk_coord(center_pos)
 	
-	for key in _chunks.keys():
+	for key in _chunks:  # Direct iteration (no .keys() allocation)
 		var chunk: Chunk = _chunks[key]
 		var dist: int = maxi(absi(key.x - center_chunk.x), absi(key.y - center_chunk.y))
 		var should_have_collision: bool = dist <= collision_radius
 		
 		if chunk.is_collision_enabled() != should_have_collision:
 			chunk.set_collision_enabled(should_have_collision)
+
+
+# -------------------------------------------------------------------
+# Player Tracking Loop
+# -------------------------------------------------------------------
+
+## Pre-computes spiral offsets sorted by distance (closest first).
+func _precompute_spiral_offsets() -> void:
+	var offsets: Array[Vector2i] = []
+	var vd_sq: int = view_distance * view_distance
+	
+	for x in range(-view_distance, view_distance + 1):
+		for z in range(-view_distance, view_distance + 1):
+			var offset := Vector2i(x, z)
+			if offset.length_squared() <= vd_sq:
+				offsets.append(offset)
+	
+	# Sort by distance (closest first = highest priority)
+	offsets.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.length_squared() < b.length_squared()
+	)
+	_load_priority_offsets = offsets
+	print("ChunkManager: Pre-computed %d spiral offsets" % offsets.size())
+
+
+## Heartbeat callback: checks player position and updates chunks.
+func _on_heartbeat() -> void:
+	if not is_instance_valid(player):
+		return
+	
+	var center_chunk := world_to_chunk_coord(player.global_position)
+	
+	# Only full update if player moved to new chunk
+	if center_chunk != _last_player_chunk:
+		_last_player_chunk = center_chunk
+		_update_chunk_visibility(center_chunk)
+		update_collision_radius(player.global_position)
+	
+	# Always process edge remesh queue
+	_process_edge_remesh_queue()
+	
+	# Check origin shifting
+	if enable_origin_shifting:
+		_check_origin_shift()
+
+
+## Main visibility update: loads nearby chunks, unloads distant ones.
+func _update_chunk_visibility(center: Vector2i) -> void:
+	var unload_sq: int = (view_distance + unload_buffer) * (view_distance + unload_buffer)
+	
+	# --- LOAD LOOP (spiral priority) ---
+	for offset in _load_priority_offsets:
+		var coord := center + offset
+		
+		if _chunks.has(coord) or _pending_chunks.has(coord):
+			continue
+		
+		# Memory cap check
+		if _chunks.size() >= max_loaded_chunks:
+			_force_unload_farthest(center)
+		
+		# Concurrent load limit
+		if _pending_chunks.size() >= max_concurrent_loads:
+			break  # Try again next heartbeat
+		
+		_spawn_chunk_threaded_or_load(coord)
+	
+	# --- UNLOAD LOOP (direct iteration, no .keys() allocation) ---
+	var to_unload: Array[Vector2i] = []
+	for coord in _chunks:
+		var dist: float = Vector2(coord.x - center.x, coord.y - center.y).length_squared()
+		if dist > unload_sq:
+			to_unload.append(coord)
+	
+	for coord in to_unload:
+		_save_and_unload(coord)
+
+
+## Spawns a chunk, checking serializer first for saved data.
+func _spawn_chunk_threaded_or_load(key: Vector2i) -> void:
+	if _pending_chunks.has(key) or _chunks.has(key):
+		return
+	
+	_pending_chunks[key] = true
+	
+	# Create chunk node immediately (on main thread)
+	var chunk: Chunk
+	if chunk_scene:
+		chunk = chunk_scene.instantiate() as Chunk
+	else:
+		chunk = Chunk.new()
+	
+	add_child(chunk)
+	
+	chunk.key = key
+	chunk.chunk_offset = Vector3(key.x * CHUNK_WIDTH, 0, key.y * CHUNK_DEPTH)
+	chunk.chunk_manager = self
+	
+	chunk.mesh_updated.connect(_on_chunk_mesh_updated)
+	chunk.border_update_requested.connect(_on_border_update_requested)
+	
+	_chunks[key] = chunk
+	
+	# Check if saved chunk exists
+	if ChunkSerializer.chunk_exists(key):
+		# Load from disk on worker thread
+		WorkerThreadPool.add_task(
+			Callable(self, "_load_chunk_task").bind(key)
+		)
+	else:
+		# Generate new chunk
+		var task_data := {
+			"key": key,
+			"offset": chunk.chunk_offset,
+			"color": chunk.chunk_color
+		}
+		WorkerThreadPool.add_task(
+			Callable(self, "_generate_chunk_task").bind(task_data)
+		)
+
+
+## Worker thread task: loads saved chunk data and generates mesh.
+func _load_chunk_task(key: Vector2i) -> void:
+	# Load voxels from disk
+	var voxels := ChunkSerializer.load_chunk(key)
+	
+	# Get chunk reference (needed for fallback and mesh gen)
+	var chunk := get_chunk(key)
+	if chunk == null:
+		call_deferred("_pending_chunks_erase", key)
+		return
+	
+	if voxels.is_empty():
+		# Fallback to generation if load fails
+		var offset := chunk.chunk_offset
+		var thread_noise := _create_thread_local_noise()
+		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
+	
+	# Generate mesh arrays
+	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+	
+	var result := {
+		"key": key,
+		"voxels": voxels,
+		"mesh_data": mesh_data
+	}
+	
+	call_deferred("_apply_chunk_data", result)
+
+
+## Helper to erase from pending on main thread.
+func _pending_chunks_erase(key: Vector2i) -> void:
+	_pending_chunks.erase(key)
+
+
+## Saves chunk to disk and unloads it.
+func _save_and_unload(key: Vector2i) -> void:
+	if not _chunks.has(key):
+		return
+	
+	var chunk: Chunk = _chunks[key]
+	var voxels := chunk.get_voxels_raw()
+	
+	# Save on worker thread to prevent stutter
+	WorkerThreadPool.add_task(
+		func() -> void:
+			ChunkSerializer.save_voxels(key, voxels)
+	)
+	
+	_unload_chunk(key)
+
+
+## Queues neighboring chunks for edge remesh when a chunk loads.
+func _queue_neighbor_edge_remesh(loaded_key: Vector2i) -> void:
+	# When a chunk loads, its 4 cardinal neighbors may have void edges
+	# that now have real data available. Queue them for remesh.
+	var neighbors := [
+		loaded_key + Vector2i(-1, 0),
+		loaded_key + Vector2i(1, 0),
+		loaded_key + Vector2i(0, -1),
+		loaded_key + Vector2i(0, 1),
+	]
+	
+	for neighbor_key in neighbors:
+		if _chunks.has(neighbor_key) and neighbor_key not in _edge_remesh_queue:
+			_edge_remesh_queue.append(neighbor_key)
+
+
+## Processes pending edge remeshes (batched per heartbeat).
+func _process_edge_remesh_queue() -> void:
+	# Process up to 4 edge remeshes per heartbeat to avoid stutter
+	const MAX_REMESH_PER_TICK: int = 4
+	var processed: int = 0
+	
+	while not _edge_remesh_queue.is_empty() and processed < MAX_REMESH_PER_TICK:
+		var key: Vector2i = _edge_remesh_queue.pop_front()
+		if _chunks.has(key):
+			_rebuild_chunk_at(key)
+			processed += 1
+
+
+## Forces unload of farthest chunk when memory cap hit.
+func _force_unload_farthest(center: Vector2i) -> void:
+	if _chunks.is_empty():
+		return
+	
+	var farthest_key: Vector2i
+	var farthest_dist: float = -1.0
+	
+	for coord in _chunks:
+		var dist: float = Vector2(coord.x - center.x, coord.y - center.y).length_squared()
+		if dist > farthest_dist:
+			farthest_dist = dist
+			farthest_key = coord
+	
+	if farthest_dist > 0:
+		_save_and_unload(farthest_key)
+		push_warning("ChunkManager: Force unloaded chunk %s (memory cap)" % farthest_key)
+
+
+## Checks if origin shift is needed and performs it.
+func _check_origin_shift() -> void:
+	if not is_instance_valid(player):
+		return
+	
+	var player_pos := player.global_position
+	if player_pos.length() < origin_shift_threshold:
+		return
+	
+	# Calculate shift to bring player back near origin
+	var shift := -player_pos
+	shift.y = 0  # Keep Y stable for physics
+	
+	# Shift all chunks
+	for chunk in _chunks.values():
+		chunk.global_position += shift
+		chunk.chunk_offset += shift
+	
+	# Shift player
+	player.global_position += shift
+	
+	# Track cumulative offset for world coordinates
+	_world_origin_offset -= shift
+	
+	print("ChunkManager: Origin shifted by ", shift, " (total offset: ", _world_origin_offset, ")")
+
+
+## Creates a thread-local FastNoiseLite with same parameters.
+func _create_thread_local_noise() -> FastNoiseLite:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise.seed = _noise_seed
+	noise.frequency = _noise_frequency
+	return noise

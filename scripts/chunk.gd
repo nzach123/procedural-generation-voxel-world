@@ -120,6 +120,11 @@ func set_voxels_raw(voxels: PackedByteArray) -> void:
 		_voxels = voxels
 
 
+## Returns raw voxel data for serialization (thread-safe copy).
+func get_voxels_raw() -> PackedByteArray:
+	return _voxels.duplicate()
+
+
 ## Applies pre-generated mesh arrays from threaded generation.
 func apply_mesh_arrays(mesh_data: Dictionary) -> void:
 	var verts: PackedVector3Array = mesh_data.get("vertices", PackedVector3Array())
