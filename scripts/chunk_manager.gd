@@ -58,8 +58,8 @@ var player: Node3D
 @export var unload_buffer: int = 2
 ## How often to check for chunk updates (seconds).
 @export var tick_rate: float = 0.5
-## Maximum concurrent chunk generation tasks.
-@export var max_concurrent_loads: int = 16
+## Maximum concurrent chunk generation tasks (lower = less frame stutter).
+@export var max_concurrent_loads: int = 8
 
 @export_group("Memory Management")
 ## Maximum chunks to keep loaded (prevents memory exhaustion).
@@ -130,6 +130,12 @@ var _noise_frequency: float
 # --- Origin Shifting ---
 ## Cumulative world origin offset for coordinate tracking.
 var _world_origin_offset: Vector3 = Vector3.ZERO
+
+# --- Time-Budgeted Mesh Apply ---
+## Queue of pending chunk data to apply (prevents frame stutter).
+var _pending_applies: Array[Dictionary] = []
+## Maximum milliseconds to spend applying meshes per frame.
+const APPLY_BUDGET_MS: float = 2.0
 
 
 # -------------------------------------------------------------------
@@ -566,11 +572,37 @@ func _generate_chunk_task(task_data: Dictionary) -> void:
 		"mesh_data": mesh_data
 	}
 	
-	call_deferred("_apply_chunk_data", result)
+	call_deferred("_queue_chunk_apply", result)
 
 
-## Main thread: applies generated data to chunk.
-func _apply_chunk_data(result: Dictionary) -> void:
+## Queues chunk data for time-budgeted application (prevents frame stutter).
+func _queue_chunk_apply(result: Dictionary) -> void:
+	_pending_applies.append(result)
+
+
+## Called every frame to process pending chunk applies within time budget.
+func _process(_delta: float) -> void:
+	_process_pending_applies()
+
+
+## Processes pending chunk applies within time budget.
+func _process_pending_applies() -> void:
+	if _pending_applies.is_empty():
+		return
+	
+	var start_us := Time.get_ticks_usec()
+	var budget_us := APPLY_BUDGET_MS * 1000.0
+	
+	while not _pending_applies.is_empty():
+		if Time.get_ticks_usec() - start_us > budget_us:
+			break  # Budget exhausted, continue next frame
+		
+		var result: Dictionary = _pending_applies.pop_front()
+		_do_apply_chunk_data(result)
+
+
+## Actually applies chunk data (called from time-budgeted queue).
+func _do_apply_chunk_data(result: Dictionary) -> void:
 	var key: Vector2i = result["key"]
 	var voxels: PackedByteArray = result["voxels"]
 	var mesh_data: Dictionary = result["mesh_data"]

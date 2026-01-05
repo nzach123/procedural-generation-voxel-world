@@ -358,12 +358,14 @@ func _flush_rebuild() -> void:
 
 
 ## Enables or disables collision for this chunk (lazy collision).
+## Uses call_deferred to prevent multiple collision builds stacking on same frame.
 func set_collision_enabled(enabled: bool) -> void:
 	if enabled == _collision_enabled:
 		return
 	_collision_enabled = enabled
 	if enabled and _mesh_instance.mesh:
-		_build_collision()
+		# DEFERRED: Prevents hitches when multiple chunks enable collision simultaneously
+		call_deferred("_build_collision")
 	elif not enabled:
 		_clear_collision()
 
