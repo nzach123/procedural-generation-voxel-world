@@ -10,9 +10,9 @@ config_version=5
 
 [application]
 
-config/name="VoxelEngine"
-run/main_scene="uid://c7nyl1d2xhsfs"
-config/features=PackedStringArray("4.4", "Forward Plus")
+config/name="RevVoxelEngine"
+run/main_scene="uid://c5veq388pr3ei"
+config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -25,6 +25,10 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/mode=2
 window/vsync/vsync_mode=0
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 
 [input]
 

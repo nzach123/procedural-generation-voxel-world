@@ -1,77 +1,55 @@
+## BlockDefinitions
+## Legacy compatibility layer providing block types and face enums.
+## Will be deprecated in favor of BlockRegistry + BlockData resources.
 extends Node
 
 
-enum Face {
-	POS_X,
-	NEG_X,
-	POS_Y,
-	NEG_Y,
-	POS_Z,
-	NEG_Z
-}
-
+## Block type enum - maps to byte values in voxel storage.
 enum BlockType {
-	GRASS,
-	DIRT,
-	STONE,
-	SNOW,
-	WOOD,
-	FOLIAGE,
-	AIR
+	AIR = 0,
+	GRASS = 1,
+	DIRT = 2,
+	STONE = 3,
 }
 
-const BLOCK_TILES := {
+
+## Face direction enum for texture mapping.
+enum Face {
+	POS_X = 0,
+	NEG_X = 1,
+	POS_Y = 2,
+	NEG_Y = 3,
+	POS_Z = 4,
+	NEG_Z = 5,
+}
+
+
+## Tile indices for each block type and face.
+## Format: BLOCK_TILES[BlockType][Face] -> tile_index
+const BLOCK_TILES: Dictionary = {
+	BlockType.AIR: {},
 	BlockType.GRASS: {
-		Face.POS_Y: 3,
-		Face.NEG_Y: 1,
+		Face.POS_X: 0,
+		Face.NEG_X: 0,
+		Face.POS_Y: 1,
+		Face.NEG_Y: 2,
 		Face.POS_Z: 0,
 		Face.NEG_Z: 0,
-		Face.POS_X: 0,
-		Face.NEG_X: 0
 	},
-	
 	BlockType.DIRT: {
-		Face.POS_Y: 1,
-		Face.NEG_Y: 1,
-		Face.POS_Z: 1,
-		Face.NEG_Z: 1,
-		Face.POS_X: 1,
-		Face.NEG_X: 1
-	},
-	
-	BlockType.STONE: {
+		Face.POS_X: 2,
+		Face.NEG_X: 2,
 		Face.POS_Y: 2,
 		Face.NEG_Y: 2,
 		Face.POS_Z: 2,
 		Face.NEG_Z: 2,
-		Face.POS_X: 2,
-		Face.NEG_X: 2
 	},
-	
-	BlockType.SNOW: {
-		Face.POS_Y: 5,
-		Face.NEG_Y: 1,
-		Face.POS_Z: 4,
-		Face.NEG_Z: 4,
-		Face.POS_X: 4,
-		Face.NEG_X: 4
+	BlockType.STONE: {
+		Face.POS_X: 3,
+		Face.NEG_X: 3,
+		Face.POS_Y: 3,
+		Face.NEG_Y: 3,
+		Face.POS_Z: 3,
+		Face.NEG_Z: 3,
 	},
-	
-	BlockType.WOOD: {
-		Face.POS_Y: 7,
-		Face.NEG_Y: 7,
-		Face.POS_Z: 6,
-		Face.NEG_Z: 6,
-		Face.POS_X: 6,
-		Face.NEG_X: 6
-	},
-	
-	BlockType.FOLIAGE: {
-		Face.POS_Y: 8,
-		Face.NEG_Y: 8,
-		Face.POS_Z: 8,
-		Face.NEG_Z: 8,
-		Face.POS_X: 8,
-		Face.NEG_X: 8
-	}
 }
