@@ -132,11 +132,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			disable_freefly()
 		
-	elif event is InputEventMouseButton and event.button_index == 2 and event.is_pressed():
+	# Block interaction (if no ability consumed input)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.is_pressed():
 		_handle_block_delete()
 				
-	elif event is InputEventMouseButton and event.button_index == 1 and event.is_pressed():
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.is_pressed():
 		_handle_block_place()
+	
+	# DEBUG: Inspect chunk under player
+	if event is InputEventKey and event.pressed and event.keycode == KEY_P:
+		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(global_position)
+			if chunk:
+				print("--- CHUNK INSPECTOR ---")
+				print("Chunk: ", chunk.key)
+				print("Offset: ", chunk.chunk_offset)
+				print("Collision enabled: ", chunk.is_collision_enabled())
+				if chunk.has_method("_get_mesh_instance_rid"):
+					print("Mesh RID: ", chunk._mesh_instance_rid) # Access private via script
+			else:
+				print("--- CHUNK INSPECTOR: No chunk found at ", global_position)
 
 
 func _physics_process(delta: float) -> void:
@@ -372,29 +387,35 @@ func check_input_mappings():
 
 func _handle_block_delete() -> void:
 	if raycast.is_colliding():
-		var col = raycast.get_collider()
-		if col:
-			var chunk = col.get_parent()
+		var point = raycast.get_collision_point()
+		var normal = raycast.get_collision_normal()
+		
+		# Offset slightly into the block to ensure we get the correct world position
+		var hit_pos = point - (normal * 0.05)
+		
+		# Look up chunk via manager
+		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
 			
-			if chunk.has_method("delete_block"):
-				var point = raycast.get_collision_point()
-				var normal = raycast.get_collision_normal()
+			if chunk and chunk.has_method("delete_block"):
 				var block_coords: Vector3i = _get_hit_block(point, normal)
-				
 				chunk.delete_block(block_coords)
 
 
 func _handle_block_place() -> void:
 	if raycast.is_colliding():
-		var col = raycast.get_collider()
-		if col:
-			var chunk = col.get_parent()
+		var point = raycast.get_collision_point()
+		var normal = raycast.get_collision_normal()
+		
+		# For placement, we want the chunk adjacent to the hit face (where new block goes)
+		# Or stick to hit chunk? Usually we modify the chunk where the new block coordinates fall.
+		var block_coords: Vector3i = _get_adjacent_block(point, normal)
+		var place_pos = Vector3(block_coords.x, block_coords.y, block_coords.z)
+		
+		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(place_pos)
 			
-			if chunk.has_method("add_block"):
-				var point = raycast.get_collision_point()
-				var normal = raycast.get_collision_normal()
-				var block_coords: Vector3i = _get_adjacent_block(point, normal)
-				
+			if chunk and chunk.has_method("add_block"):
 				if _resolve_block_overlap(block_coords, normal):
 					chunk.add_block(block_coords)
 
@@ -423,19 +444,19 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 
 func _update_block_selection() -> void:
 	if raycast.is_colliding():
-		var col = raycast.get_collider()
-		if not col:
-			return
-			
 		var point = raycast.get_collision_point()
 		var normal = raycast.get_collision_normal()
 		var block_coords: Vector3i = _get_hit_block(point, normal)
-		var chunk = col.get_parent()
 		
-		if chunk and chunk.has_method("check_block_selected"):
-			if chunk.check_block_selected(block_coords):
-				cube_selected.visible = true
-				cube_selected.global_position = Vector3(block_coords.x, block_coords.y, block_coords.z)
+		var hit_pos = point - (normal * 0.05)
+		
+		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
+		
+			if chunk and chunk.has_method("check_block_selected"):
+				if chunk.check_block_selected(block_coords):
+					cube_selected.visible = true
+					cube_selected.global_position = Vector3(block_coords.x, block_coords.y, block_coords.z)
 	else:
 		cube_selected.visible = false
 

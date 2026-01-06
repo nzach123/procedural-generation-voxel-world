@@ -1,45 +1,40 @@
-# Hand-off: Voxel Engine - Player Tracking Loop
+# Hand-off: Voxel Engine - Phase 3 (Server-Based Chunks)
 
 ## 1. Project Status Summary
-We have successfully transitioned the **RevVoxelEngine** from a static 4x4 grid to an **infinite, streaming terrain system**. 
+We have completed the migration from Node-based `Chunk.tscn` scenes to a high-performance **ChunkServer (RefCounted)** architecture. This eliminates scene tree overhead for thousands of chunks and allows direct RID management.
 
-- **Infinite Streaming:** Chunks now load/unload dynamically around the player using a 0.5s heartbeat timer.
-- **Persistence:** Modifications (and generated terrain) are saved/loaded to `user://save/` using RLE compression.
-- **Performance:** Implemented a time-budgeted mesh apply queue (2ms/frame) and deferred collision builds to eliminate loading hitches.
-- **Thread Safety:** Implemented thread-local `FastNoiseLite` copies to prevent race conditions during generation.
+-   **Architecture:** `ChunkServer` extends `RefCounted`. Manages `RenderingServer` and `PhysicsServer3D` RIDs directly.
+-   **Interaction:** Block placement/removal is restored via coordinate conversion (Global -> Local).
+-   **Stability:** Major crashes (Double-free, Out-Of-Bounds) and data corruption (Serializer mismatch) have been resolved.
 
 ---
 
-## 2. Recent Commits (Branch: `player-tracking-loop`)
-- `7bb3874`: **feat: implement Player Tracking Loop**
-    - Adds spiral priority loading, memory cap (400 chunks), and origin shifting (5000 units).
-- `b80e69a`: **perf: fix loading hitch with time-budgeted mesh applies**
-    - Defers collision builds to next frame and budgets mesh uploads to 2ms/frame.
+## 2. Recent Commits (Branch: `chunk-server-migration`)
+-   **Refactor:** Replaced `Chunk` nodes with `ChunkServer` class.
+-   **Fix:** `ChunkSerializer` now uses 64-bit coordinates (moved to `user://chunks_v3/`).
+-   **Fix:** `ChunkManager` auto-regenerates corrupted chunks (0 triangles) instead of crashing.
+-   **Fix:** Explicit `destroy()` pattern implemented to mitigate `RefCounted` lifecycle race conditions.
 
 ---
 
 ## 3. Key Systems & Constraints
-- **ChunkManager:** Central orchestrator. Uses `_load_priority_offsets` for closest-first loading.
-- **Spiral Loading:** Pre-computed list of neighbors sorted by distance squared.
-- **Void Edge Fix:** Neighbor-triggered remesh queue (`_edge_remesh_queue`) batches border updates to fix seams as new chunks appear.
-- **Collision:** Lazy collision is essential. Chunks outside `collision_radius` have no physics body.
+-   **ChunkServer:** Lightweight logic-only class. MUST be destroyed explicitly via `chunk.destroy()` to ensure RIDs are freed on the main thread before the reference is lost.
+-   **Collision:** Uses "Lazy Collision". `_collision_enabled` flag must be managed carefully. `_build_collision()` manually toggles this.
+-   **Thread Safety:** `WorkerThreadPool` handles generation/loading. `ChunkManager` handles main-thread application.
 
 ---
 
-## 4. Senior Developer Gotchas (Solved)
-- ✅ **Loading Deadlocks:** Rejected a "wait for 3x3 neighbors" approach in favor of "immediate mesh + neighbor-triggered remesh".
-- ✅ **GC Pressure:** Replaced `Dictionary.keys()` iteration with direct dictionary iteration to avoid 0.5s array allocations.
-- ✅ **Thread Safety:** Worker tasks now create their own `FastNoiseLite` instances using cached seed/frequency.
+## 4. Known Issues (Active)
+### ⚠️ "Null Instance" Warning on Unload
+**Error:** `Attempt to call function '_free_rendering_rids' in base 'null instance' on a null instance.`
+**Context:** Occurs during `NOTIFICATION_PREDELETE` in `ChunkServer.gd`.
+**Cause:** Race condition between `RefCounted` auto-deletion and the explicit `destroy()` call, or engine-internal threaded cleanup.
+**Impact:** Benign. RIDs are likely already freed by `destroy()`, but the notification hook fires on a zombie object.
+**Mitigation:** `ChunkManager` calls `chunk.destroy()` explicitly before erasing from dictionary. The notification hook is guarded but still logs the error occasionally.
 
 ---
 
 ## 5. Next Steps
-1. **Modernize BlockRegistry:** Currently, the system still uses the legacy `BlockDefinitions`. The modern resource-based `BlockRegistry` (with `BlockData` resources) is ready but needs to be fully integrated into `Chunk` meshing.
-2. **LOD System:** Implement simplified mesh generation for chunks beyond a certain radius.
-3. **Biomes:** Move from single-scale noise to a biome-layer noise system.
-4. **Origin Shifting Testing:** Verify the physics stability when the player crosses the 5000-unit threshold.
-
----
-
-## 6. How to Continue
-The latest work is on the `player-tracking-loop` branch. Run the `voxel_engine.tscn` to see the infinite terrain in action. Check `doc/walkthrough.md` for a deeper technical breakdown of method additions.
+1.  **Investigate RefCounted Lifecycle:** Debug why `destroy()` doesn't fully suppress the predelete notification error. Consider moving to a non-refcounted manual memory management if this persists.
+2.  **Optimize Meshing:** Integrate `SurfaceTool` on threads to avoid main-thread array copies.
+3.  **LOD Implementation:** Use the lightweight `ChunkServer` structure to implement distant LOD meshes.

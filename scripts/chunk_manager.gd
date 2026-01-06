@@ -10,7 +10,7 @@ extends Node
 # Signals
 # -------------------------------------------------------------------
 
-signal chunk_loaded(chunk: Chunk)
+signal chunk_loaded(chunk: ChunkServer)
 signal chunk_unloaded(key: Vector2i)
 
 
@@ -89,7 +89,7 @@ var chunk_size: int:
 # Private Variables
 # -------------------------------------------------------------------
 
-## Active chunks dictionary: Vector2i -> Chunk
+## Active chunks dictionary: Vector2i -> ChunkServer
 var _chunks: Dictionary = {}
 
 ## Triangle counts per chunk: Vector2i -> int
@@ -137,6 +137,19 @@ var _pending_applies: Array[Dictionary] = []
 ## Maximum milliseconds to spend applying meshes per frame.
 const APPLY_BUDGET_MS: float = 2.0
 
+# --- ChunkServer RID Caches ---
+## World3D scenario RID for RenderingServer.
+var _scenario_rid: RID
+## World3D physics space RID for PhysicsServer3D.
+var _space_rid: RID
+## Shared material RID for all chunk meshes.
+var _chunk_material_rid: RID
+## Keep material object alive (RID invalidates if object freed)
+var _chunk_material: StandardMaterial3D
+
+## Flag to defer RID initialization to first process frame
+var _rids_initialized: bool = false
+
 
 # -------------------------------------------------------------------
 # Lifecycle
@@ -157,6 +170,9 @@ func _ready() -> void:
 	# Pre-compute spiral offsets (closest chunks first)
 	_precompute_spiral_offsets()
 	
+	# Initialize ChunkServer RID caches (deferred to first process if viewport not ready)
+	_init_chunk_server_rids()
+	
 	# Resolve player path to node reference
 	if player_path:
 		player = get_node_or_null(player_path) as Node3D
@@ -176,12 +192,55 @@ func _ready() -> void:
 		_generate_initial_world()
 
 
+func _exit_tree() -> void:
+	# Free material RID to prevent VRAM leak
+	if _chunk_material_rid.is_valid():
+		RenderingServer.free_rid(_chunk_material_rid)
+		_chunk_material_rid = RID()
+
+
+## Initializes RID caches for ChunkServer rendering/physics.
+func _init_chunk_server_rids() -> void:
+	# Cache World3D RIDs for ChunkServer (get from viewport since ChunkManager is Node, not Node3D)
+	var viewport := get_viewport()
+	if viewport:
+		var world_3d := viewport.find_world_3d()
+		if world_3d:
+			_scenario_rid = world_3d.scenario
+			_space_rid = world_3d.space
+			_rids_initialized = true
+		else:
+			push_warning("ChunkManager: World3D not available, will retry")
+			return
+	else:
+		push_warning("ChunkManager: Viewport not available, will retry")
+		return
+	
+	# Create shared material for all chunk meshes
+	_chunk_material = StandardMaterial3D.new()
+	_chunk_material.vertex_color_use_as_albedo = true
+	_chunk_material.vertex_color_is_srgb = true
+	_chunk_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	
+	var texture := load("res://assets/test.png") as Texture2D
+	if texture:
+		_chunk_material.albedo_texture = texture
+	
+	_chunk_material_rid = _chunk_material.get_rid()
+
+
 # -------------------------------------------------------------------
 # Public API
 # -------------------------------------------------------------------
 
+## Returns the chunk at the given world position, or null if not loaded.
+func get_chunk_at_world_pos(global_pos: Vector3) -> ChunkServer:
+	var key := world_to_chunk_coord(global_pos)
+	return get_chunk(key)
+
+
 ## Returns the chunk at the given chunk coordinate, or null if not loaded.
-func get_chunk(coord: Vector2i) -> Chunk:
+func get_chunk(coord: Vector2i) -> ChunkServer:
 	return _chunks.get(coord, null)
 
 
@@ -193,7 +252,8 @@ func set_voxel(global_pos: Vector3, block_id: int) -> void:
 	var chunk := get_chunk(chunk_coord)
 	if chunk:
 		chunk.set_voxel(local.x, local.y, local.z, block_id)
-		chunk.mark_dirty()
+		# Trigger mesh rebuild for ChunkServer
+		_rebuild_chunk_at(chunk_coord)
 
 
 ## Converts world position to chunk coordinate.
@@ -486,28 +546,21 @@ func _generate_initial_world() -> void:
 	if not use_threading:
 		await get_tree().process_frame
 		for key in _chunks.keys():
-			_chunks[key].build_mesh()
+			var chunk: ChunkServer = _chunks[key]
+			var voxels := chunk.get_voxels_raw()
+			var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+			chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
 
 
 ## Spawns a chunk synchronously (legacy/debug mode).
-func _spawn_chunk_sync(key: Vector2i) -> Chunk:
-	var chunk: Chunk
-	
-	if chunk_scene:
-		chunk = chunk_scene.instantiate() as Chunk
-	else:
-		chunk = Chunk.new()
-	
-	add_child(chunk)
-	
+func _spawn_chunk_sync(key: Vector2i) -> ChunkServer:
+	var chunk := ChunkServer.new()
 	chunk.key = key
 	chunk.chunk_offset = Vector3(key.x * CHUNK_WIDTH, 0, key.y * CHUNK_DEPTH)
-	chunk.chunk_manager = self
 	
-	chunk.mesh_updated.connect(_on_chunk_mesh_updated)
-	chunk.border_update_requested.connect(_on_border_update_requested)
-	
-	chunk.init_data(_noise, max_height)
+	# Generate voxel data synchronously
+	var voxels := ChunkManager.generate_voxel_data_threaded(_noise, chunk.chunk_offset, max_height)
+	chunk.set_voxels_raw(voxels)
 	
 	_chunks[key] = chunk
 	chunk_loaded.emit(chunk)
@@ -522,21 +575,10 @@ func _spawn_chunk_threaded(key: Vector2i) -> void:
 	
 	_pending_chunks[key] = true
 	
-	# Create chunk node immediately (on main thread)
-	var chunk: Chunk
-	if chunk_scene:
-		chunk = chunk_scene.instantiate() as Chunk
-	else:
-		chunk = Chunk.new()
-	
-	add_child(chunk)
-	
+	# Create ChunkServer immediately (on main thread)
+	var chunk := ChunkServer.new()
 	chunk.key = key
 	chunk.chunk_offset = Vector3(key.x * CHUNK_WIDTH, 0, key.y * CHUNK_DEPTH)
-	chunk.chunk_manager = self
-	
-	chunk.mesh_updated.connect(_on_chunk_mesh_updated)
-	chunk.border_update_requested.connect(_on_border_update_requested)
 	
 	_chunks[key] = chunk
 	
@@ -616,8 +658,22 @@ func _do_apply_chunk_data(result: Dictionary) -> void:
 	# Apply voxel data
 	chunk.set_voxels_raw(voxels)
 	
-	# Apply mesh
-	chunk.apply_mesh_arrays(mesh_data)
+	# Apply mesh using ChunkServer RID-based approach
+	chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
+	
+	# Track triangle count
+	var tri_count: int = mesh_data.get("triangle_count", 0)
+	var old_count: int = _chunk_triangles.get(key, 0)
+	_chunk_triangles[key] = tri_count
+	triangles_total += tri_count - old_count
+	
+	# CRITICAL: Force-enable collision for chunks near player immediately after mesh apply
+	# This fixes the race condition where player spawns before collision is enabled
+	if player and _space_rid.is_valid():
+		var player_chunk := world_to_chunk_coord(player.global_position)
+		var dist := maxi(absi(key.x - player_chunk.x), absi(key.y - player_chunk.y))
+		if dist <= collision_radius:
+			chunk.set_collision_enabled(true, _space_rid)
 	
 	# Queue neighbor edge remeshes (fix void edge seams)
 	_queue_neighbor_edge_remesh(key)
@@ -630,14 +686,20 @@ func _unload_chunk(key: Vector2i) -> void:
 	if not _chunks.has(key):
 		return
 	
-	var chunk: Chunk = _chunks[key]
+	var chunk: ChunkServer = _chunks[key]
 	
 	if _chunk_triangles.has(key):
 		triangles_total -= _chunk_triangles[key]
 		_chunk_triangles.erase(key)
 	
 	_chunks.erase(key)
-	chunk.queue_free()
+	
+	# Explicitly destroy the ChunkServer to ensure main-thread RID cleanup
+	# This avoids relying on NOTIFICATION_PREDELETE which can be flaky with RefCounted
+	chunk.destroy()
+	
+	# ChunkServer is RefCounted - freed automatically when refcount hits 0
+	# RIDs cleaned up in NOTIFICATION_PREDELETE
 	
 	chunk_unloaded.emit(key)
 
@@ -674,7 +736,7 @@ func _rebuild_chunk_at(key: Vector2i) -> void:
 		
 		var task_data := {
 			"key": key,
-			"voxels": chunk._voxels.duplicate(),  # Copy for thread safety
+			"voxels": chunk.get_voxels_raw(),  # Thread-safe copy
 			"offset": chunk.chunk_offset,
 			"color": chunk.chunk_color
 		}
@@ -683,7 +745,10 @@ func _rebuild_chunk_at(key: Vector2i) -> void:
 			Callable(self, "_rebuild_chunk_task").bind(task_data)
 		)
 	else:
-		chunk.build_mesh()
+		# Sync rebuild - regenerate mesh on main thread
+		var voxels := chunk.get_voxels_raw()
+		var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+		chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
 
 
 ## Worker thread task: rebuilds mesh arrays for existing chunk.
@@ -715,19 +780,19 @@ func _apply_rebuild_data(result: Dictionary) -> void:
 	if chunk == null:
 		return
 	
-	chunk.apply_mesh_arrays(mesh_data)
+	chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
+	
+	# Update triangle count
+	var tri_count: int = mesh_data.get("triangle_count", 0)
+	var old_count: int = _chunk_triangles.get(key, 0)
+	_chunk_triangles[key] = tri_count
+	triangles_total += tri_count - old_count
 
 
-## Callback when a chunk mesh is updated.
-func _on_chunk_mesh_updated(chunk: Chunk, triangle_count: int) -> void:
-	var key: Vector2i = chunk.key
-	var old_count: int = 0
-	
-	if _chunk_triangles.has(key):
-		old_count = _chunk_triangles[key]
-	
-	_chunk_triangles[key] = triangle_count
-	triangles_total += triangle_count - old_count
+## Callback when a chunk mesh is updated (legacy - kept for compatibility).
+func _on_chunk_mesh_updated(_chunk: ChunkServer, _triangle_count: int) -> void:
+	# No longer used - triangle tracking handled in _do_apply_chunk_data
+	pass
 
 
 ## Callback when a chunk requests a border update.
@@ -741,12 +806,12 @@ func update_collision_radius(center_pos: Vector3) -> void:
 	var center_chunk := world_to_chunk_coord(center_pos)
 	
 	for key in _chunks:  # Direct iteration (no .keys() allocation)
-		var chunk: Chunk = _chunks[key]
+		var chunk: ChunkServer = _chunks[key]
 		var dist: int = maxi(absi(key.x - center_chunk.x), absi(key.y - center_chunk.y))
 		var should_have_collision: bool = dist <= collision_radius
 		
 		if chunk.is_collision_enabled() != should_have_collision:
-			chunk.set_collision_enabled(should_have_collision)
+			chunk.set_collision_enabled(should_have_collision, _space_rid)
 
 
 # -------------------------------------------------------------------
@@ -832,21 +897,10 @@ func _spawn_chunk_threaded_or_load(key: Vector2i) -> void:
 	
 	_pending_chunks[key] = true
 	
-	# Create chunk node immediately (on main thread)
-	var chunk: Chunk
-	if chunk_scene:
-		chunk = chunk_scene.instantiate() as Chunk
-	else:
-		chunk = Chunk.new()
-	
-	add_child(chunk)
-	
+	# Create ChunkServer immediately (on main thread)
+	var chunk := ChunkServer.new()
 	chunk.key = key
 	chunk.chunk_offset = Vector3(key.x * CHUNK_WIDTH, 0, key.y * CHUNK_DEPTH)
-	chunk.chunk_manager = self
-	
-	chunk.mesh_updated.connect(_on_chunk_mesh_updated)
-	chunk.border_update_requested.connect(_on_border_update_requested)
 	
 	_chunks[key] = chunk
 	
@@ -873,14 +927,19 @@ func _load_chunk_task(key: Vector2i) -> void:
 	# Load voxels from disk
 	var voxels := ChunkSerializer.load_chunk(key)
 	
+	print("ChunkManager: Loading chunk ", key, " from disk (size=", voxels.size(), ")")
+	
 	# Get chunk reference (needed for fallback and mesh gen)
 	var chunk := get_chunk(key)
 	if chunk == null:
 		call_deferred("_pending_chunks_erase", key)
 		return
 	
-	if voxels.is_empty():
-		# Fallback to generation if load fails
+	if voxels.is_empty() or voxels.size() != CHUNK_VOLUME:
+		if not voxels.is_empty():
+			print("ChunkManager: Data correction - Invalid voxel size (%d) for chunk %s. Regenerating." % [voxels.size(), key])
+		
+		# Fallback to generation if load fails or data invalid
 		var offset := chunk.chunk_offset
 		var thread_noise := _create_thread_local_noise()
 		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
@@ -888,13 +947,21 @@ func _load_chunk_task(key: Vector2i) -> void:
 	# Generate mesh arrays
 	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
 	
+	# Self-healing: If loaded chunk has 0 triangles (likely corrupted from previous bug), regenerate
+	if mesh_data["triangle_count"] == 0:
+		print("ChunkManager: Data correction - Regenerating empty chunk ", key)
+		var offset := chunk.chunk_offset
+		var thread_noise := _create_thread_local_noise()
+		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
+		mesh_data = ChunkManager.generate_mesh_arrays_threaded(voxels, offset, chunk.chunk_color)
+	
 	var result := {
 		"key": key,
 		"voxels": voxels,
 		"mesh_data": mesh_data
 	}
 	
-	call_deferred("_apply_chunk_data", result)
+	call_deferred("_queue_chunk_apply", result)
 
 
 ## Helper to erase from pending on main thread.
@@ -907,7 +974,7 @@ func _save_and_unload(key: Vector2i) -> void:
 	if not _chunks.has(key):
 		return
 	
-	var chunk: Chunk = _chunks[key]
+	var chunk: ChunkServer = _chunks[key]
 	var voxels := chunk.get_voxels_raw()
 	
 	# Save on worker thread to prevent stutter

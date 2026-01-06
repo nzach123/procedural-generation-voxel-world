@@ -51,7 +51,7 @@ var _attached: bool = false
 var _target_point: Vector3 = Vector3.ZERO
 
 ## Reference to the chunk we're attached to (for physics readiness checks).
-var _attached_chunk: Node = null
+var _attached_chunk: Object = null
 
 
 # -------------------------------------------------------------------
@@ -140,15 +140,33 @@ func _try_attach() -> bool:
 		return false
 	
 	# Void Problem Safety: Check if hit chunk has physics ready
-	var col: Object = result.get("collider")
-	if col:
-		var chunk: Node = col.get_parent()
-		if chunk and chunk.has_method("is_collision_enabled"):
-			if not chunk.is_collision_enabled():
-				# Chunk physics not ready - reject grapple
-				push_warning("GrappleAbility: Rejected grapple to chunk with no collision")
-				return false
-			_attached_chunk = chunk
+	# Void Problem Safety: Check if hit chunk has physics ready
+	# With ChunkServer, we can't get chunk via collider.get_parent() because it's an RID.
+	# We must look up the chunk via ChunkManager using the hit position.
+	var chunk_manager = player.get("chunk_manager")
+	if chunk_manager:
+		# Offset slightly into the surface to ensure we get the block's chunk, not the air neighbor
+		var normal: Vector3 = result["normal"]
+		var hit_pos: Vector3 = result["position"] - (normal * 0.05)
+		
+		# We need to access ChunkManager helpers exposed or replicate logic
+		# ChunkManager should have get_chunk_at(pos). If not, we rely on ability to access it via property.
+		if chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
+			if chunk:
+				if not chunk.is_collision_enabled():
+					push_warning("GrappleAbility: Rejected grapple to chunk with no collision")
+					return false
+				_attached_chunk = chunk
+		# Fallback: manually calculate if helper missing (assuming standard size 32)
+		elif chunk_manager.has_method("world_to_chunk_coord") and chunk_manager.has_method("get_chunk"):
+			var key: Vector2i = chunk_manager.world_to_chunk_coord(hit_pos)
+			var chunk = chunk_manager.get_chunk(key)
+			if chunk:
+				if chunk.has_method("is_collision_enabled") and not chunk.is_collision_enabled():
+					push_warning("GrappleAbility: Rejected grapple to chunk with no collision")
+					return false
+				_attached_chunk = chunk
 	
 	_target_point = result["position"]
 	_attached = true
