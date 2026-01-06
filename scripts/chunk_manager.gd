@@ -645,6 +645,11 @@ func _process_pending_applies() -> void:
 
 ## Actually applies chunk data (called from time-budgeted queue).
 func _do_apply_chunk_data(result: Dictionary) -> void:
+	# Guard: Defer if RIDs not yet initialized (prevents material null errors)
+	if not _chunk_material_rid.is_valid():
+		_pending_applies.push_back(result)
+		return
+	
 	var key: Vector2i = result["key"]
 	var voxels: PackedByteArray = result["voxels"]
 	var mesh_data: Dictionary = result["mesh_data"]

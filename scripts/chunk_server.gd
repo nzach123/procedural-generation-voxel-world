@@ -63,6 +63,9 @@ var _shape: ConcavePolygonShape3D
 ## Collision state
 var _collision_enabled: bool = false
 
+## Flag to prevent double-free when destroy() is called explicitly.
+var _destroyed: bool = false
+
 ## Triangle count for stats
 var _triangle_count: int = 0
 
@@ -86,14 +89,14 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		# If destroy() was called explicitly, RIDs are already invalid (freed).
-		# If not, this is our safety net.
+		# Skip if already cleaned up by explicit destroy()
+		if _destroyed:
+			return
+		
 		if OS.get_thread_caller_id() != OS.get_main_thread_id():
 			push_error("ChunkServer: FATAL - freed from non-main thread! RIDs leaked.")
 			return
 		
-		# Only attempt free if RIDs are still apparently valid
-		# (Note: is_valid() checks handle the double-free safety themselves)
 		_free_rendering_rids()
 		_free_physics_rids()
 
@@ -101,6 +104,9 @@ func _notification(what: int) -> void:
 ## Explicit destructor to ensure clean RID disposal on main thread.
 ## Recommended over relying on ref-count PREDELETE for heavy resources.
 func destroy() -> void:
+	if _destroyed:
+		return
+	_destroyed = true
 	_free_rendering_rids()
 	_free_physics_rids()
 

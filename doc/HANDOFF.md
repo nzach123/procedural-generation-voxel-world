@@ -25,16 +25,19 @@ We have completed the migration from Node-based `Chunk.tscn` scenes to a high-pe
 ---
 
 ## 4. Known Issues (Active)
-### ⚠️ "Null Instance" Warning on Unload
-**Error:** `Attempt to call function '_free_rendering_rids' in base 'null instance' on a null instance.`
-**Context:** Occurs during `NOTIFICATION_PREDELETE` in `ChunkServer.gd`.
-**Cause:** Race condition between `RefCounted` auto-deletion and the explicit `destroy()` call, or engine-internal threaded cleanup.
-**Impact:** Benign. RIDs are likely already freed by `destroy()`, but the notification hook fires on a zombie object.
-**Mitigation:** `ChunkManager` calls `chunk.destroy()` explicitly before erasing from dictionary. The notification hook is guarded but still logs the error occasionally.
+
+~~### ⚠️ "Null Instance" Warning on Unload~~ **FIXED**
+
+**Resolution:** Added `_destroyed` guard flag to `ChunkServer.destroy()` and `_notification(PREDELETE)`. Cleanup is now idempotent. All 21 unit tests pass.
+
+~~### ⚠️ "material is null" Errors~~ **FIXED**
+
+**Resolution:** Added RID validity guard in `ChunkManager._do_apply_chunk_data()`. Chunks now re-queue if material not yet initialized.
 
 ---
 
 ## 5. Next Steps
-1.  **Investigate RefCounted Lifecycle:** Debug why `destroy()` doesn't fully suppress the predelete notification error. Consider moving to a non-refcounted manual memory management if this persists.
+1.  ~~**Investigate RefCounted Lifecycle:**~~ ✅ Fixed via `_destroyed` guard pattern.
 2.  **Optimize Meshing:** Integrate `SurfaceTool` on threads to avoid main-thread array copies.
 3.  **LOD Implementation:** Use the lightweight `ChunkServer` structure to implement distant LOD meshes.
+

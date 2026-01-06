@@ -6,6 +6,7 @@ extends GutTest
 # -------------------------------------------------------------------
 # Helper: Creates a fresh ChunkServer for each test
 # RefCounted objects need local scope to ensure lifecycle
+# Note: Tests should call server.destroy() at end to prevent PREDELETE noise
 # -------------------------------------------------------------------
 
 func _create_server() -> ChunkServer:
@@ -39,6 +40,7 @@ func test_get_voxel_returns_air_for_unset_position() -> void:
 	var server := _create_server()
 	var result: int = server.get_voxel(5, 5, 5)
 	assert_eq(result, ChunkServer.AIR_ID, "Unset voxel should return AIR_ID")
+	server.destroy()
 
 
 func test_set_voxel_and_get_voxel_roundtrip() -> void:
@@ -46,18 +48,21 @@ func test_set_voxel_and_get_voxel_roundtrip() -> void:
 	server.set_voxel(10, 15, 20, 2)
 	var result: int = server.get_voxel(10, 15, 20)
 	assert_eq(result, 2, "Should retrieve the value that was set")
+	server.destroy()
 
 
 func test_set_voxel_at_origin() -> void:
 	var server := _create_server()
 	server.set_voxel(0, 0, 0, 1)
 	assert_eq(server.get_voxel(0, 0, 0), 1, "Origin voxel should be settable")
+	server.destroy()
 
 
 func test_set_voxel_at_max_bounds() -> void:
 	var server := _create_server()
 	server.set_voxel(31, 31, 31, 3)
 	assert_eq(server.get_voxel(31, 31, 31), 3, "Max corner should be settable")
+	server.destroy()
 
 
 func test_get_voxel_out_of_bounds_negative_returns_air() -> void:
@@ -65,6 +70,7 @@ func test_get_voxel_out_of_bounds_negative_returns_air() -> void:
 	assert_eq(server.get_voxel(-1, 0, 0), ChunkServer.AIR_ID, "Negative X should return AIR")
 	assert_eq(server.get_voxel(0, -1, 0), ChunkServer.AIR_ID, "Negative Y should return AIR")
 	assert_eq(server.get_voxel(0, 0, -1), ChunkServer.AIR_ID, "Negative Z should return AIR")
+	server.destroy()
 
 
 func test_get_voxel_out_of_bounds_over_max_returns_air() -> void:
@@ -72,6 +78,7 @@ func test_get_voxel_out_of_bounds_over_max_returns_air() -> void:
 	assert_eq(server.get_voxel(32, 0, 0), ChunkServer.AIR_ID, "X=32 should return AIR")
 	assert_eq(server.get_voxel(0, 32, 0), ChunkServer.AIR_ID, "Y=32 should return AIR")
 	assert_eq(server.get_voxel(0, 0, 32), ChunkServer.AIR_ID, "Z=32 should return AIR")
+	server.destroy()
 
 
 func test_set_voxel_out_of_bounds_does_not_crash() -> void:
@@ -82,6 +89,7 @@ func test_set_voxel_out_of_bounds_does_not_crash() -> void:
 	server.set_voxel(32, 0, 0, 1)
 	server.set_voxel(0, 32, 0, 1)
 	server.set_voxel(0, 0, 32, 1)
+	server.destroy()
 	pass_test("Out of bounds set_voxel should not crash")
 
 
@@ -96,6 +104,7 @@ func test_multiple_voxels_do_not_interfere() -> void:
 	assert_eq(server.get_voxel(1, 0, 0), 2)
 	assert_eq(server.get_voxel(0, 1, 0), 3)
 	assert_eq(server.get_voxel(0, 0, 1), 4)
+	server.destroy()
 
 
 # -------------------------------------------------------------------
@@ -112,6 +121,7 @@ func test_set_voxels_raw_with_correct_size() -> void:
 	server.set_voxels_raw(raw)
 	
 	assert_eq(server.get_voxel(0, 0, 0), 5, "First voxel should be 5")
+	server.destroy()
 
 
 func test_set_voxels_raw_with_wrong_size_is_ignored() -> void:
@@ -125,6 +135,7 @@ func test_set_voxels_raw_with_wrong_size_is_ignored() -> void:
 	server.set_voxels_raw(wrong_size)
 	
 	assert_eq(server.get_voxel(5, 5, 5), 9, "Original value should remain")
+	server.destroy()
 
 
 func test_get_voxels_raw_returns_copy() -> void:
@@ -137,6 +148,7 @@ func test_get_voxels_raw_returns_copy() -> void:
 	
 	# Original should be unchanged
 	assert_eq(server.get_voxel(0, 0, 0), 7, "Original should not be modified")
+	server.destroy()
 
 
 # -------------------------------------------------------------------
@@ -146,12 +158,14 @@ func test_get_voxels_raw_returns_copy() -> void:
 func test_collision_disabled_by_default() -> void:
 	var server := _create_server()
 	assert_false(server.is_collision_enabled(), "Collision should be disabled initially")
+	server.destroy()
 
 
 func test_collision_layer_and_mask_defaults() -> void:
 	var server := _create_server()
 	assert_eq(server.collision_layer, 1, "Default collision layer should be 1")
 	assert_eq(server.collision_mask, 1, "Default collision mask should be 1")
+	server.destroy()
 
 
 # -------------------------------------------------------------------
@@ -172,6 +186,7 @@ func test_aabb_includes_margin_at_origin() -> void:
 	assert_gt(aabb.size.x, 32.0, "AABB width should exceed 32")
 	assert_gt(aabb.size.y, 32.0, "AABB height should exceed 32")
 	assert_gt(aabb.size.z, 32.0, "AABB depth should exceed 32")
+	server.destroy()
 
 
 func test_aabb_at_offset_position() -> void:
@@ -182,6 +197,7 @@ func test_aabb_at_offset_position() -> void:
 	# Position should be offset minus margin
 	assert_almost_eq(aabb.position.x, 64.0 - 0.1, 0.001)
 	assert_almost_eq(aabb.position.z, 128.0 - 0.1, 0.001)
+	server.destroy()
 
 
 # -------------------------------------------------------------------
@@ -191,6 +207,7 @@ func test_aabb_at_offset_position() -> void:
 func test_get_triangle_count_initially_zero() -> void:
 	var server := _create_server()
 	assert_eq(server.get_triangle_count(), 0)
+	server.destroy()
 
 
 # -------------------------------------------------------------------
@@ -211,3 +228,14 @@ func test_flat_index_formula_consistency() -> void:
 				indices[idx] = true
 	
 	assert_false(collision, "Flat indexing should produce unique indices")
+
+
+# -------------------------------------------------------------------
+# Lifecycle Tests
+# -------------------------------------------------------------------
+
+func test_destroy_is_idempotent() -> void:
+	var server := _create_server()
+	server.destroy()
+	server.destroy()  # Should not crash or error
+	pass_test("Double destroy() should be safe")
