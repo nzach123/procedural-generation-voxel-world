@@ -161,3 +161,84 @@ func test_encode_decode_all_same_value() -> void:
 	assert_eq(decoded.size(), 32768)
 	assert_eq(decoded[0], 42)
 	assert_eq(decoded[32767], 42)
+
+
+# -------------------------------------------------------------------
+# File I/O Integration Tests
+# -------------------------------------------------------------------
+
+const TEST_COORD := Vector2i(99999, 99999)  # Unlikely to collide with real data
+
+
+func after_each() -> void:
+	# Clean up test files
+	ChunkSerializer.delete_chunk(TEST_COORD)
+
+
+func test_save_voxels_and_load_chunk_roundtrip() -> void:
+	var original := PackedByteArray()
+	original.resize(32768)
+	original.fill(0)
+	original[0] = 1
+	original[100] = 2
+	original[1000] = 3
+	original[32767] = 4
+	
+	ChunkSerializer.save_voxels(TEST_COORD, original)
+	
+	var loaded := ChunkSerializer.load_chunk(TEST_COORD)
+	
+	assert_eq(loaded.size(), 32768, "Loaded size matches")
+	assert_eq(loaded[0], 1, "First byte matches")
+	assert_eq(loaded[100], 2, "100th byte matches")
+	assert_eq(loaded[1000], 3, "1000th byte matches")
+	assert_eq(loaded[32767], 4, "Last byte matches")
+
+
+func test_chunk_exists_after_save() -> void:
+	var data := PackedByteArray()
+	data.resize(32768)
+	data.fill(0)
+	
+	assert_false(ChunkSerializer.chunk_exists(TEST_COORD), "Doesn't exist before save")
+	
+	ChunkSerializer.save_voxels(TEST_COORD, data)
+	
+	assert_true(ChunkSerializer.chunk_exists(TEST_COORD), "Exists after save")
+
+
+func test_delete_chunk_removes_file() -> void:
+	var data := PackedByteArray()
+	data.resize(32768)
+	data.fill(0)
+	
+	ChunkSerializer.save_voxels(TEST_COORD, data)
+	assert_true(ChunkSerializer.chunk_exists(TEST_COORD))
+	
+	ChunkSerializer.delete_chunk(TEST_COORD)
+	
+	assert_false(ChunkSerializer.chunk_exists(TEST_COORD), "Deleted successfully")
+
+
+func test_load_nonexistent_returns_empty() -> void:
+	var result := ChunkSerializer.load_chunk(Vector2i(-99999, -99999))
+	assert_eq(result.size(), 0, "Missing file returns empty array")
+
+
+func test_save_load_terrain_like_data() -> void:
+	var original := PackedByteArray()
+	original.resize(32768)
+	original.fill(0)
+	
+	# Bottom half is stone (3)
+	for i in range(16384):
+		original[i] = 3
+	
+	ChunkSerializer.save_voxels(TEST_COORD, original)
+	var loaded := ChunkSerializer.load_chunk(TEST_COORD)
+	
+	# Verify terrain structure preserved
+	assert_eq(loaded[0], 3, "Bottom is stone")
+	assert_eq(loaded[16383], 3, "Mid-bottom is stone")
+	assert_eq(loaded[16384], 0, "Top half is air")
+	assert_eq(loaded[32767], 0, "Top is air")
