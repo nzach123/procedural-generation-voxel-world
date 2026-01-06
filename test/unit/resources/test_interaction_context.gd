@@ -105,3 +105,83 @@ func test_multiple_contexts_are_independent() -> void:
 	ctx1.selected_block_id = 99
 	
 	assert_eq(ctx2.selected_block_id, 2, "Contexts should be independent")
+
+
+# -------------------------------------------------------------------
+# Object Pooling Tests
+# -------------------------------------------------------------------
+
+func before_each() -> void:
+	# Clear pool before each test to ensure isolation
+	InteractionContext.clear_pool()
+
+
+func test_rent_returns_new_when_pool_empty() -> void:
+	var ctx := InteractionContext.rent()
+	assert_not_null(ctx, "rent() should return a valid context")
+	assert_true(ctx is InteractionContext)
+	InteractionContext.release(ctx)
+
+
+func test_rent_returns_recycled_when_pool_has_items() -> void:
+	var ctx1 := InteractionContext.rent()
+	InteractionContext.release(ctx1)
+	
+	var ctx2 := InteractionContext.rent()
+	assert_eq(ctx1, ctx2, "rent() should return the same recycled instance")
+	InteractionContext.release(ctx2)
+
+
+func test_release_adds_to_pool() -> void:
+	assert_eq(InteractionContext.get_pool_size(), 0, "Pool should start empty")
+	
+	var ctx := InteractionContext.rent()
+	InteractionContext.release(ctx)
+	
+	assert_eq(InteractionContext.get_pool_size(), 1, "Pool should have 1 item after release")
+
+
+func test_rent_resets_state() -> void:
+	var ctx := InteractionContext.rent()
+	ctx.selected_block_id = 99
+	ctx.brush_radius = 5
+	ctx.reach_distance = 100.0
+	ctx.can_modify = false
+	InteractionContext.release(ctx)
+	
+	var ctx2 := InteractionContext.rent()
+	assert_eq(ctx2.selected_block_id, 2, "Should reset to default block ID")
+	assert_eq(ctx2.brush_radius, 1, "Should reset to default brush radius")
+	assert_eq(ctx2.reach_distance, 5.0, "Should reset to default reach")
+	assert_true(ctx2.can_modify, "Should reset to default can_modify")
+	InteractionContext.release(ctx2)
+
+
+func test_pool_respects_max_size() -> void:
+	var contexts: Array[InteractionContext] = []
+	
+	# Rent more than MAX_POOL_SIZE
+	for i in range(40):
+		contexts.append(InteractionContext.rent())
+	
+	# Release all
+	for ctx in contexts:
+		InteractionContext.release(ctx)
+	
+	# Pool should cap at MAX_POOL_SIZE (32)
+	assert_true(InteractionContext.get_pool_size() <= 32, "Pool should not exceed MAX_POOL_SIZE")
+
+
+func test_release_null_is_safe() -> void:
+	# Should not crash
+	InteractionContext.release(null)
+	assert_eq(InteractionContext.get_pool_size(), 0, "null release should not add to pool")
+
+
+func test_clear_pool_empties_pool() -> void:
+	var ctx := InteractionContext.rent()
+	InteractionContext.release(ctx)
+	assert_eq(InteractionContext.get_pool_size(), 1)
+	
+	InteractionContext.clear_pool()
+	assert_eq(InteractionContext.get_pool_size(), 0, "clear_pool should empty the pool")

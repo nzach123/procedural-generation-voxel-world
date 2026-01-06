@@ -1,21 +1,48 @@
 extends CharacterBody3D
 
+## Player controller with component-based ability system.
+## Abilities handle specialized behaviors (grapple, etc.) and are delegated input/physics.
+
 @onready var raycast := $Camera3D/RayCast3D
 @onready var cube_selected: Node3D = $"../CubeSelection"
 
 ## Reference to ChunkManager for collision radius updates.
 var chunk_manager: Node = null
 
+
+# -------------------------------------------------------------------
+# Exports
+# -------------------------------------------------------------------
+
 const SPEED = 5.0
 const JUMP_VELOCITY = 4.5
 const MOUSE_SENS = 0.002
 
-var _yaw = 0
-var _pitch = 0
+## Array of abilities available to this player.
+## These are duplicated on init to ensure state isolation.
+@export var ability_templates: Array[PlayerAbility] = []
+
+
+# -------------------------------------------------------------------
+# State
+# -------------------------------------------------------------------
+
+var _yaw: float = 0.0
+var _pitch: float = 0.0
 
 ## Last position used for collision radius update (throttling).
 var _last_collision_update_pos: Vector3 = Vector3.ZERO
 
+## Instantiated abilities (duplicated from templates for state isolation).
+var _abilities: Array[PlayerAbility] = []
+
+## Currently active ability (or null if no special ability active).
+var _active_ability: PlayerAbility = null
+
+
+# -------------------------------------------------------------------
+# Lifecycle
+# -------------------------------------------------------------------
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -26,9 +53,17 @@ func _ready() -> void:
 	# Enable collision for chunks near player on startup
 	if chunk_manager and chunk_manager.has_method("update_collision_radius"):
 		call_deferred("_initial_collision_update")
+	
+	# Initialize abilities with state isolation
+	_initialize_abilities()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Delegate to active ability first
+	if _active_ability and _active_ability.input(event):
+		return  # Ability consumed the input
+	
+	# Core player input handling
 	if event.is_action_pressed("ui_focus_next"):
 		if get_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME:
 			get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
@@ -39,32 +74,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().quit()
 	
 	elif event is InputEventMouseButton and event.button_index == 2 and event.is_pressed():
-		if raycast.is_colliding():
-			var collider = raycast.get_collider()
-			if collider:
-				var chunk = collider.get_parent()
-				
-				if chunk.has_method("delete_block"):
-					var point = raycast.get_collision_point()
-					var normal = raycast.get_collision_normal()
-					var block_coords: Vector3i = _get_hit_block(point, normal)
-					
-					chunk.delete_block(block_coords)
+		_handle_block_delete()
 				
 	elif event is InputEventMouseButton and event.button_index == 1 and event.is_pressed():
-		if raycast.is_colliding():
-			var collider = raycast.get_collider()
-			if collider:
-				var chunk = collider.get_parent()
-				
-				if chunk.has_method("add_block"):
-					var point = raycast.get_collision_point()
-					var normal = raycast.get_collision_normal()
-					var block_coords: Vector3i = _get_adjacent_block(point, normal)
-					
-					if _resolve_block_overlap(block_coords, normal):
-						chunk.add_block(block_coords)
-		
+		_handle_block_place()
 		
 	elif event is InputEventMouseMotion:
 		_yaw -= event.relative.x * MOUSE_SENS
@@ -76,11 +89,92 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Add the gravity.
+	# Delegate to active ability
+	if _active_ability:
+		_active_ability.physics_update(delta)
+	
+	# Update cooldowns on all abilities
+	for ability in _abilities:
+		if ability != _active_ability:
+			ability.physics_update(delta)
+	
+	# Core movement (can be overridden by ability)
+	if not _active_ability or not _active_ability.is_active:
+		_process_default_movement(delta)
+	
+	_update_block_selection()
+	_update_collision_radius()
+
+
+# -------------------------------------------------------------------
+# Ability System
+# -------------------------------------------------------------------
+
+## Initialize abilities from templates with state isolation.
+func _initialize_abilities() -> void:
+	_abilities.clear()
+	for template in ability_templates:
+		if template:
+			var instance := template.create_instance()
+			_abilities.append(instance)
+
+
+## Activate an ability by index.
+## @param index: Index into _abilities array.
+## @return bool: True if activation succeeded.
+func activate_ability(index: int) -> bool:
+	if index < 0 or index >= _abilities.size():
+		return false
+	
+	var ability := _abilities[index]
+	if not ability.is_ready():
+		return false  # On cooldown
+	
+	# Deactivate current ability if interruptible
+	if _active_ability:
+		if not _active_ability.interruptible:
+			return false
+		_active_ability.exit()
+	
+	_active_ability = ability
+	_active_ability.enter(self)
+	return true
+
+
+## Deactivate the current ability.
+func deactivate_ability() -> void:
+	if _active_ability:
+		_active_ability.exit()
+		_active_ability = null
+
+
+## Get the currently active ability (or null).
+func get_active_ability() -> PlayerAbility:
+	return _active_ability
+
+
+## Get ability by index.
+func get_ability(index: int) -> PlayerAbility:
+	if index >= 0 and index < _abilities.size():
+		return _abilities[index]
+	return null
+
+
+## Get total number of abilities.
+func get_ability_count() -> int:
+	return _abilities.size()
+
+
+# -------------------------------------------------------------------
+# Movement
+# -------------------------------------------------------------------
+
+func _process_default_movement(delta: float) -> void:
+	# Add gravity
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 
-	# Handle jump.
+	# Handle jump
 	if Input.is_action_just_pressed("ui_accept") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 
@@ -94,10 +188,39 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0, SPEED)
 
 	move_and_slide()
-	
-	_update_block_selection()
-	_update_collision_radius()
 
+
+# -------------------------------------------------------------------
+# Block Interaction
+# -------------------------------------------------------------------
+
+func _handle_block_delete() -> void:
+	if raycast.is_colliding():
+		var collider = raycast.get_collider()
+		if collider:
+			var chunk = collider.get_parent()
+			
+			if chunk.has_method("delete_block"):
+				var point = raycast.get_collision_point()
+				var normal = raycast.get_collision_normal()
+				var block_coords: Vector3i = _get_hit_block(point, normal)
+				
+				chunk.delete_block(block_coords)
+
+
+func _handle_block_place() -> void:
+	if raycast.is_colliding():
+		var collider = raycast.get_collider()
+		if collider:
+			var chunk = collider.get_parent()
+			
+			if chunk.has_method("add_block"):
+				var point = raycast.get_collision_point()
+				var normal = raycast.get_collision_normal()
+				var block_coords: Vector3i = _get_adjacent_block(point, normal)
+				
+				if _resolve_block_overlap(block_coords, normal):
+					chunk.add_block(block_coords)
 
 
 func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
@@ -139,9 +262,8 @@ func _update_block_selection() -> void:
 				cube_selected.global_position = Vector3(block_coords.x, block_coords.y, block_coords.z)
 	else:
 		cube_selected.visible = false
-	
-	
-	
+
+
 func _get_hit_block(point: Vector3, normal: Vector3) -> Vector3i:
 	return Vector3i(
 		roundi(point.x - normal.x * 0.5),
@@ -157,6 +279,10 @@ func _get_adjacent_block(point: Vector3, normal: Vector3) -> Vector3i:
 		roundi(point.z + normal.z * 0.5)
 	)
 
+
+# -------------------------------------------------------------------
+# Collision Radius
+# -------------------------------------------------------------------
 
 ## Updates collision radius on ChunkManager when player moves significantly.
 func _update_collision_radius() -> void:

@@ -11,7 +11,7 @@ extends RefCounted
 
 const MAGIC: String = "VXL"
 const VERSION: int = 1
-const SAVE_DIR: String = "user://save/"
+const SAVE_DIR: String = "user://chunks_v3/"
 
 
 # -------------------------------------------------------------------
@@ -34,8 +34,8 @@ static func save_chunk(chunk: Chunk) -> void:
 	# Write header
 	file.store_buffer(MAGIC.to_ascii_buffer())
 	file.store_8(VERSION)
-	file.store_32(key.x)
-	file.store_32(key.y)
+	file.store_64(key.x)
+	file.store_64(key.y)
 	
 	# Get voxel data and compress with RLE
 	var voxels := _get_voxels_from_chunk(chunk)
@@ -73,8 +73,8 @@ static func load_chunk(coord: Vector2i) -> PackedByteArray:
 	if version != VERSION:
 		push_warning("ChunkSerializer: Version mismatch in %s (got %d, expected %d)" % [path, version, VERSION])
 	
-	var x := file.get_32()
-	var z := file.get_32()
+	var x := file.get_64()
+	var z := file.get_64()
 	
 	if x != coord.x or z != coord.y:
 		push_warning("ChunkSerializer: Coordinate mismatch in %s" % path)
@@ -119,8 +119,8 @@ static func save_voxels(coord: Vector2i, voxels: PackedByteArray) -> void:
 	# Write header
 	file.store_buffer(MAGIC.to_ascii_buffer())
 	file.store_8(VERSION)
-	file.store_32(coord.x)
-	file.store_32(coord.y)
+	file.store_64(coord.x)
+	file.store_64(coord.y)
 	
 	# Compress with RLE and write
 	var rle_data := encode_rle(voxels)
@@ -192,8 +192,8 @@ static func _get_chunk_path(coord: Vector2i) -> String:
 ## Ensures the save directory exists.
 static func _ensure_save_dir() -> void:
 	var dir := DirAccess.open("user://")
-	if dir and not dir.dir_exists("save"):
-		dir.make_dir("save")
+	if dir and not dir.dir_exists("chunks_v3"):
+		dir.make_dir("chunks_v3")
 
 
 ## Gets voxel data from chunk (handles private variable access).
