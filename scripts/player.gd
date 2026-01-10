@@ -231,9 +231,9 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 	var pos := global_transform.origin
 	
 	# rough AABB check:
-	var overlap_x = abs(pos.x - bx) < 0.6
-	var overlap_y = abs(pos.y - by) < 1.3
-	var overlap_z = abs(pos.z - bz) < 0.6
+	var overlap_x = abs(pos.x - bx) < VoxelConstants.PLAYER_HALF_WIDTH
+	var overlap_y = abs(pos.y - by) < VoxelConstants.PLAYER_HEIGHT
+	var overlap_z = abs(pos.z - bz) < VoxelConstants.PLAYER_HALF_WIDTH
 	
 	if overlap_x and overlap_y and overlap_z:
 		if normal == Vector3.UP:
@@ -291,7 +291,7 @@ func _update_collision_radius() -> void:
 	
 	# Only update if moved more than half a chunk
 	var pos := global_position
-	if pos.distance_squared_to(_last_collision_update_pos) > 256.0:  # 16^2 = half chunk
+	if pos.distance_squared_to(_last_collision_update_pos) > VoxelConstants.COLLISION_UPDATE_THRESHOLD:  # 16^2 = half chunk
 		_last_collision_update_pos = pos
 		chunk_manager.update_collision_radius(pos)
 

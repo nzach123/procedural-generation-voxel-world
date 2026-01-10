@@ -160,7 +160,7 @@ func _ready() -> void:
 	
 	_noise = FastNoiseLite.new()
 	_noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	_noise.seed = 20140114
+	_noise.seed = VoxelConstants.DEFAULT_NOISE_SEED
 	_noise.frequency = noise_scale
 	
 	# Cache noise parameters for thread-local copies
@@ -185,7 +185,7 @@ func _ready() -> void:
 		_update_timer.one_shot = false
 		_update_timer.timeout.connect(_on_heartbeat)
 		add_child(_update_timer)
-		print("ChunkManager: Player tracking enabled (view_distance=%d)" % view_distance)
+		DebugLogger.debug("Player tracking enabled (view_distance=%d)" % view_distance, "ChunkManager")
 	else:
 		# Legacy mode: generate static world if no player assigned
 		push_warning("ChunkManager: No player assigned, using legacy static generation")
@@ -839,7 +839,7 @@ func _precompute_spiral_offsets() -> void:
 		return a.length_squared() < b.length_squared()
 	)
 	_load_priority_offsets = offsets
-	print("ChunkManager: Pre-computed %d spiral offsets" % offsets.size())
+	DebugLogger.debug("Pre-computed %d spiral offsets" % offsets.size(), "ChunkManager")
 
 
 ## Heartbeat callback: checks player position and updates chunks.
@@ -932,7 +932,7 @@ func _load_chunk_task(key: Vector2i) -> void:
 	# Load voxels from disk
 	var voxels := ChunkSerializer.load_chunk(key)
 	
-	print("ChunkManager: Loading chunk ", key, " from disk (size=", voxels.size(), ")")
+	DebugLogger.debug("Loading chunk %s from disk (size=%d)" % [key, voxels.size()], "ChunkManager")
 	
 	# Get chunk reference (needed for fallback and mesh gen)
 	var chunk := get_chunk(key)
@@ -942,7 +942,7 @@ func _load_chunk_task(key: Vector2i) -> void:
 	
 	if voxels.is_empty() or voxels.size() != CHUNK_VOLUME:
 		if not voxels.is_empty():
-			print("ChunkManager: Data correction - Invalid voxel size (%d) for chunk %s. Regenerating." % [voxels.size(), key])
+			DebugLogger.debug("Data correction - Invalid voxel size (%d) for chunk %s. Regenerating." % [voxels.size(), key], "ChunkManager")
 		
 		# Fallback to generation if load fails or data invalid
 		var offset := chunk.chunk_offset
@@ -954,7 +954,7 @@ func _load_chunk_task(key: Vector2i) -> void:
 	
 	# Self-healing: If loaded chunk has 0 triangles (likely corrupted from previous bug), regenerate
 	if mesh_data["triangle_count"] == 0:
-		print("ChunkManager: Data correction - Regenerating empty chunk ", key)
+		DebugLogger.debug("Data correction - Regenerating empty chunk %s" % key, "ChunkManager")
 		var offset := chunk.chunk_offset
 		var thread_noise := _create_thread_local_noise()
 		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
@@ -1063,7 +1063,7 @@ func _check_origin_shift() -> void:
 	# Track cumulative offset for world coordinates
 	_world_origin_offset -= shift
 	
-	print("ChunkManager: Origin shifted by ", shift, " (total offset: ", _world_origin_offset, ")")
+	DebugLogger.debug("Origin shifted by %s (total offset: %s)" % [shift, _world_origin_offset], "ChunkManager")
 
 
 ## Creates a thread-local FastNoiseLite with same parameters.

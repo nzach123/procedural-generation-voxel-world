@@ -210,6 +210,7 @@ func _on_display_refresh_needed() -> void:
 # Track if checks changed while settings panel was open
 var _checks_changed_while_settings_open: bool = false
 
+
 # Called when any setting changes - just track that checks changed, don't re-scan
 func _on_setting_changed(key: String, _value: Variant) -> void:
 	if key.begins_with("check_") or key == "all_checks":
@@ -244,10 +245,14 @@ func _get_available_types_for_severity(sev_filter: String) -> Dictionary:
 	for issue in current_result.issues:
 		var matches_severity := false
 		match sev_filter:
-			"all": matches_severity = true
-			"critical": matches_severity = issue.severity == Issue.Severity.CRITICAL
-			"warning": matches_severity = issue.severity == Issue.Severity.WARNING
-			"info": matches_severity = issue.severity == Issue.Severity.INFO
+			"all":
+				matches_severity = true
+			"critical":
+				matches_severity = issue.severity == Issue.Severity.CRITICAL
+			"warning":
+				matches_severity = issue.severity == Issue.Severity.WARNING
+			"info":
+				matches_severity = issue.severity == Issue.Severity.INFO
 
 		if matches_severity:
 			available[issue.check_id] = true
@@ -318,10 +323,14 @@ func _on_html_export_pressed() -> void:
 
 func _on_severity_filter_changed(index: int) -> void:
 	match index:
-		0: current_severity_filter = "all"
-		1: current_severity_filter = "critical"
-		2: current_severity_filter = "warning"
-		3: current_severity_filter = "info"
+		0:
+			current_severity_filter = "all"
+		1:
+			current_severity_filter = "critical"
+		2:
+			current_severity_filter = "warning"
+		3:
+			current_severity_filter = "info"
 
 	if current_result:
 		var prev_type := current_type_filter
@@ -562,10 +571,7 @@ func _show_claude_customize_popup() -> void:
 	# Center on screen
 	var screen_size := DisplayServer.screen_get_size()
 	var popup_size := _claude_customize_popup.custom_minimum_size
-	_claude_customize_popup.global_position = Vector2(
-		(screen_size.x - popup_size.x) / 2,
-		(screen_size.y - popup_size.y) / 2
-	)
+	_claude_customize_popup.global_position = Vector2((screen_size.x - popup_size.x) / 2, (screen_size.y - popup_size.y) / 2)
 	_claude_customize_popup.visible = true
 
 
@@ -590,13 +596,7 @@ func _on_claude_customize_launch() -> void:
 		var parts := decoded_data.split("|")
 
 		if parts.size() >= 5:
-			var issue_data := {
-				"file_path": parts[0],
-				"line": int(parts[1]),
-				"check_id": parts[2],
-				"severity": parts[3],
-				"message": parts[4]
-			}
+			var issue_data := {"file_path": parts[0], "line": int(parts[1]), "check_id": parts[2], "severity": parts[3], "message": parts[4]}
 			_launch_claude_code_custom(issue_data, custom_command, custom_instructions)
 
 	# Handle batch type-level links
@@ -661,7 +661,7 @@ func _on_claude_context_menu_selected(id: int) -> void:
 		_show_claude_customize_popup()
 		return
 
-	var use_plan_mode := (id == 0)
+	var use_plan_mode := id == 0
 
 	# Handle single issue links
 	if _claude_context_menu_link.begins_with("claude://"):
@@ -670,13 +670,7 @@ func _on_claude_context_menu_selected(id: int) -> void:
 		var parts := decoded_data.split("|")
 
 		if parts.size() >= 5:
-			var issue_data := {
-				"file_path": parts[0],
-				"line": int(parts[1]),
-				"check_id": parts[2],
-				"severity": parts[3],
-				"message": parts[4]
-			}
+			var issue_data := {"file_path": parts[0], "line": int(parts[1]), "check_id": parts[2], "severity": parts[3], "message": parts[4]}
 			_launch_claude_code(issue_data, use_plan_mode)
 		return
 
@@ -699,9 +693,12 @@ func _matches_severity(issue) -> bool:
 		return true
 	var Issue = IssueScript
 	match current_severity_filter:
-		"critical": return issue.severity == Issue.Severity.CRITICAL
-		"warning": return issue.severity == Issue.Severity.WARNING
-		"info": return issue.severity == Issue.Severity.INFO
+		"critical":
+			return issue.severity == Issue.Severity.CRITICAL
+		"warning":
+			return issue.severity == Issue.Severity.WARNING
+		"info":
+			return issue.severity == Issue.Severity.INFO
 	return false
 
 
@@ -723,11 +720,7 @@ func _filter_issues(issues: Array) -> Array:
 
 func _build_report_header() -> String:
 	var bbcode := "[b]Code Quality Report[/b]\n"
-	bbcode += "Files: %d | Lines: %d | Time: %dms\n" % [
-		current_result.files_analyzed,
-		current_result.total_lines,
-		current_result.analysis_time_ms
-	]
+	bbcode += "Files: %d | Lines: %d | Time: %dms\n" % [current_result.files_analyzed, current_result.total_lines, current_result.analysis_time_ms]
 
 	var summary_parts: Array[String] = []
 	if settings_manager.show_total_issues:
@@ -747,7 +740,7 @@ func _build_active_filters_text(count: int) -> String:
 	if current_type_filter != "all":
 		active.append(ISSUE_TYPES.get(current_type_filter, current_type_filter))
 	if current_file_filter != "":
-		active.append("\"%s\"" % current_file_filter)
+		active.append('"%s"' % current_file_filter)
 	if active.size() > 0:
 		return "[color=#888888]Filters: %s (%d matches)[/color]\n\n" % [", ".join(active), count]
 	return ""
@@ -758,9 +751,12 @@ func _group_issues_by_severity(issues: Array) -> Dictionary:
 	var grouped := {"critical": [], "warning": [], "info": []}
 	for issue in issues:
 		match issue.severity:
-			Issue.Severity.CRITICAL: grouped.critical.append(issue)
-			Issue.Severity.WARNING: grouped.warning.append(issue)
-			Issue.Severity.INFO: grouped.info.append(issue)
+			Issue.Severity.CRITICAL:
+				grouped.critical.append(issue)
+			Issue.Severity.WARNING:
+				grouped.warning.append(issue)
+			Issue.Severity.INFO:
+				grouped.info.append(issue)
 	return grouped
 
 
@@ -794,11 +790,7 @@ func _display_results() -> void:
 	var grouped := _group_issues_by_severity(filtered)
 
 	# Store grouped issues for batch Claude operations
-	_grouped_issues_by_severity = {
-		"critical": grouped.critical,
-		"warning": grouped.warning,
-		"info": grouped.info
-	}
+	_grouped_issues_by_severity = {"critical": grouped.critical, "warning": grouped.warning, "info": grouped.info}
 
 	bbcode += _format_severity_section(grouped.critical, "CRITICAL", "🔴", "#ff6b6b", "critical")
 	bbcode += _format_severity_section(grouped.warning, "WARNINGS", "🟡", "#ffd93d", "warning")
@@ -864,23 +856,21 @@ func _format_issue(issue, color: String) -> String:
 	var short_path: String = issue.file_path.get_file()
 	var link := "%s:%d" % [issue.file_path, issue.line]
 
-	var line := "    [url=%s][color=%s]%s:%d[/color][/url] %s" % [
-		link, color, short_path, issue.line, issue.message
-	]
+	var line := "    [url=%s][color=%s]%s:%d[/color][/url] %s" % [link, color, short_path, issue.line, issue.message]
 
 	# Add Claude Code button if enabled
 	if settings_manager.claude_code_enabled:
 		var severity_str: String = "unknown"
 		var Issue = IssueScript
 		match issue.severity:
-			Issue.Severity.CRITICAL: severity_str = "critical"
-			Issue.Severity.WARNING: severity_str = "warning"
-			Issue.Severity.INFO: severity_str = "info"
+			Issue.Severity.CRITICAL:
+				severity_str = "critical"
+			Issue.Severity.WARNING:
+				severity_str = "warning"
+			Issue.Severity.INFO:
+				severity_str = "info"
 
-		var claude_data := "%s|%d|%s|%s|%s" % [
-			issue.file_path, issue.line, issue.check_id, severity_str,
-			issue.message.replace("|", "-")
-		]
+		var claude_data := "%s|%d|%s|%s|%s" % [issue.file_path, issue.line, issue.check_id, severity_str, issue.message.replace("|", "-")]
 		line += " [url=claude://%s][img=20x20]res://addons/gdscript-linter/icons/claude.png[/img][/url]" % claude_data.uri_encode()
 
 	return line + "\n"
@@ -934,9 +924,7 @@ func _format_ignored_section() -> String:
 					break
 				var short_path: String = issue.file_path.get_file()
 				var link := "%s:%d" % [issue.file_path, issue.line]
-				bbcode += "    [url=%s][color=#555555]%s:%d[/color][/url] %s\n" % [
-					link, short_path, issue.line, issue.message
-				]
+				bbcode += "    [url=%s][color=#555555]%s:%d[/color][/url] %s\n" % [link, short_path, issue.line, issue.message]
 				shown += 1
 
 	return bbcode
@@ -961,13 +949,7 @@ func _handle_claude_single_link(location: String) -> void:
 	var parts := decoded_data.split("|")
 
 	if parts.size() >= 5:
-		var issue_data := {
-			"file_path": parts[0],
-			"line": int(parts[1]),
-			"check_id": parts[2],
-			"severity": parts[3],
-			"message": parts[4]
-		}
+		var issue_data := {"file_path": parts[0], "line": int(parts[1]), "check_id": parts[2], "severity": parts[3], "message": parts[4]}
 		_on_claude_button_pressed(issue_data)
 	else:
 		push_warning("Invalid Claude link format: %s" % location)
@@ -1048,11 +1030,7 @@ func _launch_claude_code(issue: Dictionary, use_plan_mode: bool) -> void:
 		if command.is_empty():
 			command = "claude"
 
-	var args: PackedStringArray = [
-		"-d", project_path,
-		"powershell", "-NoProfile", "-NoExit",
-		"-Command", "%s '%s'" % [command, escaped_prompt]
-	]
+	var args: PackedStringArray = ["-d", project_path, "powershell", "-NoProfile", "-NoExit", "-Command", "%s '%s'" % [command, escaped_prompt]]
 	OS.create_process("wt", args)
 
 
@@ -1070,9 +1048,12 @@ func _launch_claude_code_batch(issues: Array, use_plan_mode: bool) -> void:
 		var issue = issues[i]
 		var severity_str: String = "unknown"
 		match issue.severity:
-			Issue.Severity.CRITICAL: severity_str = "critical"
-			Issue.Severity.WARNING: severity_str = "warning"
-			Issue.Severity.INFO: severity_str = "info"
+			Issue.Severity.CRITICAL:
+				severity_str = "critical"
+			Issue.Severity.WARNING:
+				severity_str = "warning"
+			Issue.Severity.INFO:
+				severity_str = "info"
 
 		prompt += "%d. %s:%d\n" % [i + 1, issue.file_path, issue.line]
 		prompt += "   Type: %s | Severity: %s\n" % [issue.check_id, severity_str]
@@ -1096,11 +1077,7 @@ func _launch_claude_code_batch(issues: Array, use_plan_mode: bool) -> void:
 		if command.is_empty():
 			command = "claude"
 
-	var args: PackedStringArray = [
-		"-d", project_path,
-		"powershell", "-NoProfile", "-NoExit",
-		"-Command", "%s '%s'" % [command, escaped_prompt]
-	]
+	var args: PackedStringArray = ["-d", project_path, "powershell", "-NoProfile", "-NoExit", "-Command", "%s '%s'" % [command, escaped_prompt]]
 	OS.create_process("wt", args)
 
 
@@ -1123,11 +1100,7 @@ func _launch_claude_code_custom(issue: Dictionary, custom_command: String, custo
 
 	var command := custom_command if not custom_command.is_empty() else "claude"
 
-	var args: PackedStringArray = [
-		"-d", project_path,
-		"powershell", "-NoProfile", "-NoExit",
-		"-Command", "%s '%s'" % [command, escaped_prompt]
-	]
+	var args: PackedStringArray = ["-d", project_path, "powershell", "-NoProfile", "-NoExit", "-Command", "%s '%s'" % [command, escaped_prompt]]
 	OS.create_process("wt", args)
 
 
@@ -1145,9 +1118,12 @@ func _launch_claude_code_batch_custom(issues: Array, custom_command: String, cus
 		var issue = issues[i]
 		var severity_str: String = "unknown"
 		match issue.severity:
-			Issue.Severity.CRITICAL: severity_str = "critical"
-			Issue.Severity.WARNING: severity_str = "warning"
-			Issue.Severity.INFO: severity_str = "info"
+			Issue.Severity.CRITICAL:
+				severity_str = "critical"
+			Issue.Severity.WARNING:
+				severity_str = "warning"
+			Issue.Severity.INFO:
+				severity_str = "info"
 
 		prompt += "%d. %s:%d\n" % [i + 1, issue.file_path, issue.line]
 		prompt += "   Type: %s | Severity: %s\n" % [issue.check_id, severity_str]
@@ -1162,9 +1138,5 @@ func _launch_claude_code_batch_custom(issues: Array, custom_command: String, cus
 
 	var command := custom_command if not custom_command.is_empty() else "claude"
 
-	var args: PackedStringArray = [
-		"-d", project_path,
-		"powershell", "-NoProfile", "-NoExit",
-		"-Command", "%s '%s'" % [command, escaped_prompt]
-	]
+	var args: PackedStringArray = ["-d", project_path, "powershell", "-NoProfile", "-NoExit", "-Command", "%s '%s'" % [command, escaped_prompt]]
 	OS.create_process("wt", args)

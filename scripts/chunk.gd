@@ -170,7 +170,7 @@ func init_data(noise: FastNoiseLite, max_height: int = 16) -> void:
 				if y < height:
 					block_id = BlockDefinitions.BlockType.DIRT
 				elif y == height:
-					if y > 15:
+					if y > VoxelConstants.STONE_LAYER_HEIGHT:
 						block_id = BlockDefinitions.BlockType.STONE
 					else:
 						block_id = BlockDefinitions.BlockType.GRASS
@@ -350,10 +350,10 @@ func _flush_rebuild() -> void:
 	
 	# Use ChunkManager's threaded rebuild if available
 	if chunk_manager and chunk_manager.has_method("_rebuild_chunk_at"):
-		print("[PERF] Chunk ", key, ": Using THREADED rebuild")
+		DebugLogger.debug("Chunk %s: Using THREADED rebuild" % key, "Chunk")
 		chunk_manager._rebuild_chunk_at(key)
 	else:
-		print("[PERF] Chunk ", key, ": Using SYNC rebuild (slow!)")
+		DebugLogger.debug("Chunk %s: Using SYNC rebuild (slow!)" % key, "Chunk")
 		build_mesh()
 
 
@@ -510,7 +510,7 @@ func _build_collision() -> void:
 	_clear_collision()
 	
 	if not _collision_enabled:
-		print("[PERF] Chunk ", key, ": Collision SKIPPED (disabled)")
+		DebugLogger.debug("Chunk %s: Collision SKIPPED (disabled)" % key, "Chunk")
 		return
 	
 	if _mesh_instance.mesh == null:
@@ -527,7 +527,7 @@ func _build_collision() -> void:
 	add_child(_collision_body)
 	
 	var elapsed := Time.get_ticks_msec() - start
-	print("[PERF] Chunk ", key, ": Collision BUILT in ", elapsed, "ms (triangles: ", _triangle_count, ")")
+	DebugLogger.debug("Chunk %s: Collision BUILT in %dms (triangles: %d)" % [key, elapsed, _triangle_count], "Chunk")
 
 
 ## Removes collision shape.

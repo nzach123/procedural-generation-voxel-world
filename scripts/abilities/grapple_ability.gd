@@ -143,16 +143,16 @@ func _try_attach() -> bool:
 	# Void Problem Safety: Check if hit chunk has physics ready
 	# With ChunkServer, we can't get chunk via collider.get_parent() because it's an RID.
 	# We must look up the chunk via ChunkManager using the hit position.
-	var chunk_manager = player.get("chunk_manager")
+	var chunk_manager: Node = player.get("chunk_manager")
 	if chunk_manager:
 		# Offset slightly into the surface to ensure we get the block's chunk, not the air neighbor
 		var normal: Vector3 = result["normal"]
-		var hit_pos: Vector3 = result["position"] - (normal * 0.05)
+		var hit_pos: Vector3 = result["position"] - (normal * VoxelConstants.RAYCAST_INSET)
 		
 		# We need to access ChunkManager helpers exposed or replicate logic
 		# ChunkManager should have get_chunk_at(pos). If not, we rely on ability to access it via property.
 		if chunk_manager.has_method("get_chunk_at_world_pos"):
-			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
+			var chunk: RefCounted = chunk_manager.get_chunk_at_world_pos(hit_pos)
 			if chunk:
 				if not chunk.is_collision_enabled():
 					push_warning("GrappleAbility: Rejected grapple to chunk with no collision")
@@ -161,7 +161,7 @@ func _try_attach() -> bool:
 		# Fallback: manually calculate if helper missing (assuming standard size 32)
 		elif chunk_manager.has_method("world_to_chunk_coord") and chunk_manager.has_method("get_chunk"):
 			var key: Vector2i = chunk_manager.world_to_chunk_coord(hit_pos)
-			var chunk = chunk_manager.get_chunk(key)
+			var chunk: RefCounted = chunk_manager.get_chunk(key)
 			if chunk:
 				if chunk.has_method("is_collision_enabled") and not chunk.is_collision_enabled():
 					push_warning("GrappleAbility: Rejected grapple to chunk with no collision")

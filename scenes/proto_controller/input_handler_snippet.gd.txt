@@ -1,0 +1,30 @@
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and mouse_captured:
+		if not _active_ability:
+			_handle_block_delete()
+	
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and mouse_captured:
+		if not _active_ability:
+			_handle_block_place()
+			
+	if event.is_action_pressed(input_freefly):
+		freeflying = !freeflying
+		collider.disabled = freeflying
+		
+		if freeflying:
+			velocity = Vector3.ZERO
+	
+	# DEBUG: Inspect chunk under player
+	if event is InputEventKey and event.pressed and event.keycode == KEY_P:
+		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
+			var chunk = chunk_manager.get_chunk_at_world_pos(global_position)
+			if chunk:
+				DebugLogger.debug("--- CHUNK INSPECTOR ---", "Debug")
+				DebugLogger.debug("Chunk: %s" % chunk.key, "Debug")
+				DebugLogger.debug("Offset: %s" % chunk.chunk_offset, "Debug")
+				DebugLogger.debug("Collision enabled: %s" % chunk.is_collision_enabled(), "Debug")
+				if chunk.has_method("_get_mesh_instance_rid"):
+					DebugLogger.debug("Mesh RID: %s" % chunk._get_mesh_instance_rid(), "Debug")
+			else:
+				DebugLogger.debug("--- CHUNK INSPECTOR: No chunk found at %s" % global_position, "Debug")

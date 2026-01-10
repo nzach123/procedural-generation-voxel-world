@@ -142,16 +142,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	# DEBUG: Inspect chunk under player
 	if event is InputEventKey and event.pressed and event.keycode == KEY_P:
 		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
-			var chunk = chunk_manager.get_chunk_at_world_pos(global_position)
+			var chunk: RefCounted = chunk_manager.get_chunk_at_world_pos(global_position)
 			if chunk:
-				print("--- CHUNK INSPECTOR ---")
-				print("Chunk: ", chunk.key)
-				print("Offset: ", chunk.chunk_offset)
-				print("Collision enabled: ", chunk.is_collision_enabled())
+				DebugLogger.debug("--- CHUNK INSPECTOR ---", "Debug")
+				DebugLogger.debug("Chunk: %s" % chunk.key, "Debug")
+				DebugLogger.debug("Offset: %s" % chunk.chunk_offset, "Debug")
+				DebugLogger.debug("Collision enabled: %s" % chunk.is_collision_enabled(), "Debug")
 				if chunk.has_method("_get_mesh_instance_rid"):
-					print("Mesh RID: ", chunk._mesh_instance_rid) # Access private via script
+					DebugLogger.debug("Mesh RID: %s" % chunk._mesh_instance_rid, "Debug")
 			else:
-				print("--- CHUNK INSPECTOR: No chunk found at ", global_position)
+				DebugLogger.debug("--- CHUNK INSPECTOR: No chunk found at %s" % global_position, "Debug")
 
 
 func _physics_process(delta: float) -> void:
@@ -324,9 +324,9 @@ func _try_activate_ability_by_input(event: InputEvent) -> bool:
 ## Rotate us to look around.
 ## Base of controller rotates around y (left/right). Head rotates around x (up/down).
 ## Modifies look_rotation based on rot_input, then resets basis and rotates by look_rotation.
-func rotate_look(rot_input : Vector2):
+func rotate_look(rot_input : Vector2) -> void:
 	look_rotation.x -= rot_input.y * look_speed
-	look_rotation.x = clamp(look_rotation.x, deg_to_rad(-85), deg_to_rad(85))
+	look_rotation.x = clamp(look_rotation.x, deg_to_rad(-VoxelConstants.LOOK_ANGLE_LIMIT), deg_to_rad(VoxelConstants.LOOK_ANGLE_LIMIT))
 	look_rotation.y -= rot_input.x * look_speed
 	transform.basis = Basis()
 	rotate_y(look_rotation.y)
@@ -334,30 +334,30 @@ func rotate_look(rot_input : Vector2):
 	head.rotate_x(look_rotation.x)
 
 
-func enable_freefly():
+func enable_freefly() -> void:
 	collider.disabled = true
 	freeflying = true
 	velocity = Vector3.ZERO
 
 
-func disable_freefly():
+func disable_freefly() -> void:
 	collider.disabled = false
 	freeflying = false
 
 
-func capture_mouse():
+func capture_mouse() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	mouse_captured = true
 
 
-func release_mouse():
+func release_mouse() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	mouse_captured = false
 
 
 ## Checks if some Input Actions haven't been created.
 ## Disables functionality accordingly.
-func check_input_mappings():
+func check_input_mappings() -> void:
 	if can_move and not InputMap.has_action(input_left):
 		push_error("Movement disabled. No InputAction found for input_left: " + input_left)
 		can_move = false
@@ -387,15 +387,15 @@ func check_input_mappings():
 
 func _handle_block_delete() -> void:
 	if raycast.is_colliding():
-		var point = raycast.get_collision_point()
-		var normal = raycast.get_collision_normal()
+		var point: Vector3 = raycast.get_collision_point()
+		var normal: Vector3 = raycast.get_collision_normal()
 		
 		# Offset slightly into the block to ensure we get the correct world position
-		var hit_pos = point - (normal * 0.05)
+		var hit_pos: Vector3 = point - (normal * VoxelConstants.RAYCAST_INSET)
 		
 		# Look up chunk via manager
 		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
-			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
+			var chunk: RefCounted = chunk_manager.get_chunk_at_world_pos(hit_pos)
 			
 			if chunk and chunk.has_method("delete_block"):
 				var block_coords: Vector3i = _get_hit_block(point, normal)
@@ -404,16 +404,16 @@ func _handle_block_delete() -> void:
 
 func _handle_block_place() -> void:
 	if raycast.is_colliding():
-		var point = raycast.get_collision_point()
-		var normal = raycast.get_collision_normal()
+		var point: Vector3 = raycast.get_collision_point()
+		var normal: Vector3 = raycast.get_collision_normal()
 		
 		# For placement, we want the chunk adjacent to the hit face (where new block goes)
 		# Or stick to hit chunk? Usually we modify the chunk where the new block coordinates fall.
 		var block_coords: Vector3i = _get_adjacent_block(point, normal)
-		var place_pos = Vector3(block_coords.x, block_coords.y, block_coords.z)
+		var place_pos: Vector3 = Vector3(block_coords.x, block_coords.y, block_coords.z)
 		
 		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
-			var chunk = chunk_manager.get_chunk_at_world_pos(place_pos)
+			var chunk: RefCounted = chunk_manager.get_chunk_at_world_pos(place_pos)
 			
 			if chunk and chunk.has_method("add_block"):
 				if _resolve_block_overlap(block_coords, normal):
@@ -428,13 +428,13 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 	var pos := global_transform.origin
 	
 	# rough AABB check:
-	var overlap_x = abs(pos.x - bx) < 0.6
-	var overlap_y = abs(pos.y - by) < 1.3
-	var overlap_z = abs(pos.z - bz) < 0.6
+	var overlap_x: bool = abs(pos.x - bx) < VoxelConstants.PLAYER_HALF_WIDTH
+	var overlap_y: bool = abs(pos.y - by) < VoxelConstants.PLAYER_HEIGHT
+	var overlap_z: bool = abs(pos.z - bz) < VoxelConstants.PLAYER_HALF_WIDTH
 	
 	if overlap_x and overlap_y and overlap_z:
 		if normal == Vector3.UP:
-			var collision = move_and_collide(Vector3.UP)
+			var collision: KinematicCollision3D = move_and_collide(Vector3.UP)
 			return collision == null
 		
 		return false
@@ -444,14 +444,14 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 
 func _update_block_selection() -> void:
 	if raycast.is_colliding():
-		var point = raycast.get_collision_point()
-		var normal = raycast.get_collision_normal()
+		var point: Vector3 = raycast.get_collision_point()
+		var normal: Vector3 = raycast.get_collision_normal()
 		var block_coords: Vector3i = _get_hit_block(point, normal)
 		
-		var hit_pos = point - (normal * 0.05)
+		var hit_pos: Vector3 = point - (normal * VoxelConstants.RAYCAST_INSET)
 		
 		if chunk_manager and chunk_manager.has_method("get_chunk_at_world_pos"):
-			var chunk = chunk_manager.get_chunk_at_world_pos(hit_pos)
+			var chunk: RefCounted = chunk_manager.get_chunk_at_world_pos(hit_pos)
 		
 			if chunk and chunk.has_method("check_block_selected"):
 				if chunk.check_block_selected(block_coords):
@@ -488,7 +488,7 @@ func _update_collision_radius() -> void:
 	
 	# Only update if moved more than half a chunk
 	var pos := global_position
-	if pos.distance_squared_to(_last_collision_update_pos) > 256.0:  # 16^2 = half chunk
+	if pos.distance_squared_to(_last_collision_update_pos) > VoxelConstants.COLLISION_UPDATE_THRESHOLD:  # 16^2 = half chunk
 		_last_collision_update_pos = pos
 		chunk_manager.update_collision_radius(pos)
 

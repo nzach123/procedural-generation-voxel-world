@@ -8,14 +8,12 @@
 class_name PlayerAbility
 extends Resource
 
-
 # -------------------------------------------------------------------
 # Signals
 # -------------------------------------------------------------------
 
 ## Emitted when the ability completes or is interrupted.
 signal ability_finished
-
 
 # -------------------------------------------------------------------
 # Exports
@@ -33,7 +31,6 @@ signal ability_finished
 ## Whether this ability can be interrupted by other abilities.
 @export var interruptible: bool = true
 
-
 # -------------------------------------------------------------------
 # State (Instance-specific)
 # -------------------------------------------------------------------
@@ -47,10 +44,10 @@ var cooldown_remaining: float = 0.0
 ## Whether the ability is currently active.
 var is_active: bool = false
 
-
 # -------------------------------------------------------------------
 # Lifecycle Methods (Override in subclasses)
 # -------------------------------------------------------------------
+
 
 ## Called when this ability becomes the active ability.
 ## @param owner: The CharacterBody3D that owns this ability.
@@ -85,6 +82,7 @@ func input(event: InputEvent) -> bool:
 # -------------------------------------------------------------------
 # Public API
 # -------------------------------------------------------------------
+
 
 ## Returns true if the ability is ready to use (not on cooldown).
 func is_ready() -> bool:

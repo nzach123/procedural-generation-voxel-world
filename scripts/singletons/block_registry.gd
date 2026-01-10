@@ -29,7 +29,7 @@ func register_block(id: int, data: BlockData) -> void:
 	if _blocks.has(id):
 		push_warning("BlockRegistry: Overwriting block ID %d" % id)
 	_blocks[id] = data
-	print("BlockRegistry: Registered block %d (%s)" % [id, data.block_name])
+	DebugLogger.debug("Registered block %d (%s)" % [id, data.block_name], "BlockRegistry")
 
 
 ## Retrieves the BlockData resource for a given ID.
@@ -89,4 +89,4 @@ func _load_all_blocks() -> void:
 		file_name = dir.get_next()
 	
 	dir.list_dir_end()
-	print("BlockRegistry: Loaded %d blocks" % _blocks.size())
+	DebugLogger.debug("Loaded %d blocks" % _blocks.size(), "BlockRegistry")

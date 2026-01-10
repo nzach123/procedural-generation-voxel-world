@@ -1,7 +1,47 @@
-[gd_scene load_steps=3 format=3 uid="uid://dg5q7r8nxkp2c"]
+[gd_scene load_steps=7 format=3 uid="uid://dg5q7r8nxkp2c"]
 
 [ext_resource type="Script" uid="uid://bte5tgtc4tbfx" path="res://addons/gdscript-linter/dock.gd" id="1_dock"]
-[ext_resource type="Texture2D" uid="uid://dhb7gprc0gupq" path="res://addons/gdscript-linter/icons/settings.svg" id="2_settings"]
+[ext_resource type="Texture2D" uid="uid://b7it4orv2badh" path="res://addons/gdscript-linter/icons/settings.svg" id="2_settings"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_y4cd3"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.145, 0.169, 0.204, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sn6d4"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.11, 0.13, 0.16, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_f1gkt"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.18, 0.21, 0.25, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ugmbb"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0, 0, 0, 0)
 
 [node name="CodeQualityDock" type="Control"]
 custom_minimum_size = Vector2(400, 200)
@@ -35,6 +75,9 @@ layout_mode = 2
 [node name="ScanButton" type="Button" parent="VBox/Toolbar"]
 custom_minimum_size = Vector2(90, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_y4cd3")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_sn6d4")
+theme_override_styles/hover = SubResource("StyleBoxFlat_f1gkt")
 text = "Scan"
 
 [node name="Spacer1" type="Control" parent="VBox/Toolbar"]
@@ -127,21 +170,27 @@ custom_minimum_size = Vector2(2, 0)
 layout_mode = 2
 
 [node name="ExportButton" type="Button" parent="VBox/Toolbar"]
-custom_minimum_size = Vector2(0, 28)
 visible = false
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_y4cd3")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_sn6d4")
+theme_override_styles/hover = SubResource("StyleBoxFlat_f1gkt")
 disabled = true
 text = "Export JSON"
 
 [node name="HTMLExportButton" type="Button" parent="VBox/Toolbar"]
 custom_minimum_size = Vector2(90, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_y4cd3")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_sn6d4")
+theme_override_styles/hover = SubResource("StyleBoxFlat_f1gkt")
 text = "Export HTML"
 
 [node name="SettingsButton" type="Button" parent="VBox/Toolbar"]
+modulate = Color(0.7, 0.7, 0.7, 1)
 custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
-modulate = Color(0.7, 0.7, 0.7, 1)
 tooltip_text = "Settings"
 icon = ExtResource("2_settings")
 flat = true
@@ -165,6 +214,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_ugmbb")
 bbcode_enabled = true
 text = "[center][color=#888888]Click Scan to analyze codebase[/color][/center]"
-selection_enabled = false
+meta_underlined = false
