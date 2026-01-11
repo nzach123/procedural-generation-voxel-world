@@ -5,8 +5,12 @@
 class_name ChunkManager
 extends Node
 
-# Explicit preload for static method access
+# Explicit preloads for static method access
 const MeshBuilderClass := preload("res://scripts/chunk/mesh_builder.gd")
+const CoordinateMathClass := preload("res://scripts/chunk/coordinate_math.gd")
+const VisibilityManagerClass := preload("res://scripts/chunk/visibility_manager.gd")
+const ChunkLoaderClass := preload("res://scripts/chunk/chunk_loader.gd")
+const VoxelDataGeneratorClass := preload("res://scripts/chunk/voxel_data_generator.gd")
 
 
 # -------------------------------------------------------------------
@@ -261,17 +265,12 @@ func set_voxel(global_pos: Vector3, block_id: int) -> void:
 
 ## Converts world position to chunk coordinate.
 func world_to_chunk_coord(global_pos: Vector3) -> Vector2i:
-	var cx: int = int(floor(global_pos.x / CHUNK_WIDTH))
-	var cz: int = int(floor(global_pos.z / CHUNK_DEPTH))
-	return Vector2i(cx, cz)
+	return CoordinateMathClass.world_to_chunk_coord(global_pos)
 
 
 ## Converts world position to local voxel coordinate within a chunk.
 func world_to_local_voxel(global_pos: Vector3) -> Vector3i:
-	var local_x: int = posmod(int(floor(global_pos.x)), CHUNK_WIDTH)
-	var local_y: int = clampi(int(floor(global_pos.y)), 0, CHUNK_HEIGHT - 1)
-	var local_z: int = posmod(int(floor(global_pos.z)), CHUNK_DEPTH)
-	return Vector3i(local_x, local_y, local_z)
+	return CoordinateMathClass.world_to_local_voxel(global_pos)
 
 
 ## Legacy compatibility: checks if world position is air.
@@ -301,94 +300,9 @@ func delete_block_world(world_coords: Vector3i) -> void:
 	_update_neighbors_at(world_coords)
 
 
-# -------------------------------------------------------------------
-# Threading API
-# -------------------------------------------------------------------
-
-## Generates voxel data on a worker thread (THREAD-SAFE).
-## Returns a PackedByteArray with voxel IDs.
-static func generate_voxel_data_threaded(
-	noise: FastNoiseLite,
-	chunk_offset: Vector3,
-	max_h: int
-) -> PackedByteArray:
-	var voxels := PackedByteArray()
-	voxels.resize(CHUNK_VOLUME)
-	voxels.fill(0)  # AIR
-	
-	for x in range(CHUNK_WIDTH):
-		for z in range(CHUNK_DEPTH):
-			var world_x: float = x + chunk_offset.x
-			var world_z: float = z + chunk_offset.z
-			
-			var height: int = int((noise.get_noise_2d(world_x, world_z) + 1.0) * 0.5 * max_h)
-			height = clampi(height, 0, CHUNK_HEIGHT - 1)
-			
-			for y in range(CHUNK_HEIGHT):
-				var block_id: int = 0  # AIR
-				if y < height:
-					block_id = BlockDefinitions.BlockType.DIRT
-				elif y == height:
-					if y > 15:
-						block_id = BlockDefinitions.BlockType.STONE
-					else:
-						block_id = BlockDefinitions.BlockType.GRASS
-				
-				# Flat index: x + z*WIDTH + y*WIDTH*DEPTH
-				var idx: int = x + z * CHUNK_WIDTH + y * CHUNK_WIDTH * CHUNK_DEPTH
-				voxels[idx] = block_id
-	
-	return voxels
-
-
-## Generates mesh arrays on a worker thread (THREAD-SAFE).
-## Returns a Dictionary with keys: vertices, uvs, colors, normals, indices, triangle_count
-static func generate_mesh_arrays_threaded(
-	voxels: PackedByteArray,
-	chunk_offset: Vector3,
-	chunk_color: Color,
-	tiles_per_row: int = 2
-) -> Dictionary:
-	var arrays := MeshBuilderClass.create_arrays()
-	var triangle_count: int = 0
-	var vertex_index: int = 0
-	
-	# Face neighbor offsets for visibility checks
-	var face_offsets := {
-		BlockDefinitions.Face.POS_X: Vector3i(1, 0, 0),
-		BlockDefinitions.Face.NEG_X: Vector3i(-1, 0, 0),
-		BlockDefinitions.Face.POS_Y: Vector3i(0, 1, 0),
-		BlockDefinitions.Face.NEG_Y: Vector3i(0, -1, 0),
-		BlockDefinitions.Face.POS_Z: Vector3i(0, 0, 1),
-		BlockDefinitions.Face.NEG_Z: Vector3i(0, 0, -1),
-	}
-	
-	for y in range(CHUNK_HEIGHT):
-		for z in range(CHUNK_DEPTH):
-			for x in range(CHUNK_WIDTH):
-				var idx: int = x + z * CHUNK_WIDTH + y * CHUNK_WIDTH * CHUNK_DEPTH
-				var block_id: int = voxels[idx]
-				if block_id == 0:  # AIR
-					continue
-				
-				var pos := Vector3(x, y, z) + chunk_offset
-				
-				# Check each face for visibility
-				for face in face_offsets:
-					var offset: Vector3i = face_offsets[face]
-					if _is_air_local(voxels, x + offset.x, y + offset.y, z + offset.z):
-						vertex_index += MeshBuilderClass.add_face(arrays, vertex_index, pos, face, block_id, chunk_color, tiles_per_row)
-						triangle_count += 2
-	
-	return MeshBuilderClass.to_mesh_data(arrays, triangle_count)
-
-
-## Helper: Check if local position is air (thread-safe, no cross-chunk).
-static func _is_air_local(voxels: PackedByteArray, x: int, y: int, z: int) -> bool:
-	if x < 0 or x >= CHUNK_WIDTH or y < 0 or y >= CHUNK_HEIGHT or z < 0 or z >= CHUNK_DEPTH:
-		return true  # Treat boundary as air for initial mesh
-	var idx: int = x + z * CHUNK_WIDTH + y * CHUNK_WIDTH * CHUNK_DEPTH
-	return voxels[idx] == 0
+# NOTE: Voxel and mesh generation moved to VoxelDataGenerator utility class.
+# Use VoxelDataGenerator.generate_voxel_data() and VoxelDataGenerator.generate_mesh_arrays()
+# for thread-safe generation operations.
 
 
 # -------------------------------------------------------------------
@@ -411,7 +325,7 @@ func _generate_initial_world() -> void:
 		for key in _chunks.keys():
 			var chunk: ChunkServer = _chunks[key]
 			var voxels := chunk.get_voxels_raw()
-			var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+			var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(voxels, chunk.chunk_offset, chunk.chunk_color)
 			chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
 
 
@@ -422,7 +336,7 @@ func _spawn_chunk_sync(key: Vector2i) -> ChunkServer:
 	chunk.chunk_offset = Vector3(key.x * CHUNK_WIDTH, 0, key.y * CHUNK_DEPTH)
 	
 	# Generate voxel data synchronously
-	var voxels := ChunkManager.generate_voxel_data_threaded(_noise, chunk.chunk_offset, max_height)
+	var voxels := VoxelDataGeneratorClass.generate_voxel_data(_noise, chunk.chunk_offset, max_height)
 	chunk.set_voxels_raw(voxels)
 	
 	_chunks[key] = chunk
@@ -465,10 +379,10 @@ func _generate_chunk_task(task_data: Dictionary) -> void:
 	
 	# Stage 1: Generate voxel data (using thread-local noise for safety)
 	var thread_noise := _create_thread_local_noise()
-	var voxels := ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
+	var voxels := VoxelDataGeneratorClass.generate_voxel_data(thread_noise, offset, max_height)
 	
 	# Stage 2: Generate mesh arrays
-	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, offset, color)
+	var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(voxels, offset, color)
 	
 	# Stage 3: Apply on main thread
 	var result := {
@@ -615,7 +529,7 @@ func _rebuild_chunk_at(key: Vector2i) -> void:
 	else:
 		# Sync rebuild - regenerate mesh on main thread
 		var voxels := chunk.get_voxels_raw()
-		var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+		var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(voxels, chunk.chunk_offset, chunk.chunk_color)
 		chunk.apply_mesh(mesh_data, _scenario_rid, _chunk_material_rid)
 
 
@@ -627,7 +541,7 @@ func _rebuild_chunk_task(task_data: Dictionary) -> void:
 	var color: Color = task_data["color"]
 	
 	# Generate mesh arrays on thread
-	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, offset, color)
+	var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(voxels, offset, color)
 	
 	var result := {
 		"key": key,
@@ -688,21 +602,8 @@ func update_collision_radius(center_pos: Vector3) -> void:
 
 ## Pre-computes spiral offsets sorted by distance (closest first).
 func _precompute_spiral_offsets() -> void:
-	var offsets: Array[Vector2i] = []
-	var vd_sq: int = view_distance * view_distance
-	
-	for x in range(-view_distance, view_distance + 1):
-		for z in range(-view_distance, view_distance + 1):
-			var offset := Vector2i(x, z)
-			if offset.length_squared() <= vd_sq:
-				offsets.append(offset)
-	
-	# Sort by distance (closest first = highest priority)
-	offsets.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		return a.length_squared() < b.length_squared()
-	)
-	_load_priority_offsets = offsets
-	DebugLogger.debug("Pre-computed %d spiral offsets" % offsets.size(), "ChunkManager")
+	_load_priority_offsets = VisibilityManagerClass.compute_spiral_offsets(view_distance)
+	DebugLogger.debug("Pre-computed %d spiral offsets" % _load_priority_offsets.size(), "ChunkManager")
 
 
 ## Heartbeat callback: checks player position and updates chunks.
@@ -810,18 +711,18 @@ func _load_chunk_task(key: Vector2i) -> void:
 		# Fallback to generation if load fails or data invalid
 		var offset := chunk.chunk_offset
 		var thread_noise := _create_thread_local_noise()
-		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
+		voxels = VoxelDataGeneratorClass.generate_voxel_data(thread_noise, offset, max_height)
 	
 	# Generate mesh arrays
-	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(voxels, chunk.chunk_offset, chunk.chunk_color)
+	var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(voxels, chunk.chunk_offset, chunk.chunk_color)
 	
 	# Self-healing: If loaded chunk has 0 triangles (likely corrupted from previous bug), regenerate
 	if mesh_data["triangle_count"] == 0:
 		DebugLogger.debug("Data correction - Regenerating empty chunk %s" % key, "ChunkManager")
 		var offset := chunk.chunk_offset
 		var thread_noise := _create_thread_local_noise()
-		voxels = ChunkManager.generate_voxel_data_threaded(thread_noise, offset, max_height)
-		mesh_data = ChunkManager.generate_mesh_arrays_threaded(voxels, offset, chunk.chunk_color)
+		voxels = VoxelDataGeneratorClass.generate_voxel_data(thread_noise, offset, max_height)
+		mesh_data = VoxelDataGeneratorClass.generate_mesh_arrays(voxels, offset, chunk.chunk_color)
 	
 	var result := {
 		"key": key,

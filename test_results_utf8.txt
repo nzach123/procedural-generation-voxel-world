@@ -1,0 +1,13 @@
+﻿Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+---  GUT  ---
+[1m[INFO]:  [0musing [C:/Users/Nick/AppData/Roaming/Godot/app_userdata/RevVoxelEngine] for temporary output.
+Godot version:  4.5.1
+GUT version:  9.5.0
+
+
+
+
+[31m[ERROR]:  [0mNothing was run.
+On the one hand nothing failed, on the other hand nothing did anything.
+

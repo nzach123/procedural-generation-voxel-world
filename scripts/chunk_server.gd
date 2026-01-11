@@ -7,8 +7,8 @@
 class_name ChunkServer
 extends RefCounted
 
-
-# -- Constants --
+# Explicit preload for static method access
+const VoxelDataGeneratorClass := preload("res://scripts/chunk/voxel_data_generator.gd")
 
 const WIDTH: int = 32
 const HEIGHT: int = 32
@@ -253,7 +253,7 @@ func _update_mesh() -> void:
 		return
 		
 	# Synchronous regeneration (fast for single block)
-	var mesh_data := ChunkManager.generate_mesh_arrays_threaded(_voxels, chunk_offset, chunk_color)
+	var mesh_data := VoxelDataGeneratorClass.generate_mesh_arrays(_voxels, chunk_offset, chunk_color)
 	apply_mesh(mesh_data, _scenario, _material)
 	
 	# Collision update if enabled

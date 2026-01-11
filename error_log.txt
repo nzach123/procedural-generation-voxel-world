@@ -1,0 +1,18 @@
+﻿Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+[ChunkManager] Pre-computed 197 spiral offsets
+[ChunkManager] Player tracking enabled (view_distance=8)
+Godot_v4.5.1-stable_win64_console.exe : ERROR: 
+Parameter "material" is null.
+At line:1 char:1
++ & "C:\00_Godot\z_installer\Godot_v4.5.1-stable_win64_
+console.exe" --h ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: Pa 
+   rameter "material" is null.:String) [], RemoteExce  
+  ption
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   at: material_set_shader (servers/rendering/dummy/sto
+rage/material_storage.cpp:251)

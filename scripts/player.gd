@@ -196,13 +196,13 @@ func _process_default_movement(delta: float) -> void:
 
 func _handle_block_delete() -> void:
 	if raycast.is_colliding():
-		var collider = raycast.get_collider()
+		var collider: Object = raycast.get_collider()
 		if collider:
-			var chunk = collider.get_parent()
+			var chunk: Node = collider.get_parent()
 			
 			if chunk.has_method("delete_block"):
-				var point = raycast.get_collision_point()
-				var normal = raycast.get_collision_normal()
+				var point: Vector3 = raycast.get_collision_point()
+				var normal: Vector3 = raycast.get_collision_normal()
 				var block_coords: Vector3i = _get_hit_block(point, normal)
 				
 				chunk.delete_block(block_coords)
@@ -210,13 +210,13 @@ func _handle_block_delete() -> void:
 
 func _handle_block_place() -> void:
 	if raycast.is_colliding():
-		var collider = raycast.get_collider()
+		var collider: Object = raycast.get_collider()
 		if collider:
-			var chunk = collider.get_parent()
+			var chunk: Node = collider.get_parent()
 			
 			if chunk.has_method("add_block"):
-				var point = raycast.get_collision_point()
-				var normal = raycast.get_collision_normal()
+				var point: Vector3 = raycast.get_collision_point()
+				var normal: Vector3 = raycast.get_collision_normal()
 				var block_coords: Vector3i = _get_adjacent_block(point, normal)
 				
 				if _resolve_block_overlap(block_coords, normal):
@@ -231,13 +231,13 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 	var pos := global_transform.origin
 	
 	# rough AABB check:
-	var overlap_x = abs(pos.x - bx) < VoxelConstants.PLAYER_HALF_WIDTH
-	var overlap_y = abs(pos.y - by) < VoxelConstants.PLAYER_HEIGHT
-	var overlap_z = abs(pos.z - bz) < VoxelConstants.PLAYER_HALF_WIDTH
+	var overlap_x: bool = abs(pos.x - bx) < VoxelConstants.PLAYER_HALF_WIDTH
+	var overlap_y: bool = abs(pos.y - by) < VoxelConstants.PLAYER_HEIGHT
+	var overlap_z: bool = abs(pos.z - bz) < VoxelConstants.PLAYER_HALF_WIDTH
 	
 	if overlap_x and overlap_y and overlap_z:
 		if normal == Vector3.UP:
-			var collision = move_and_collide(Vector3.UP)
+			var collision: KinematicCollision3D = move_and_collide(Vector3.UP)
 			return collision == null
 		
 		return false
@@ -247,14 +247,14 @@ func _resolve_block_overlap(block_coords: Vector3i, normal: Vector3) -> bool:
 
 func _update_block_selection() -> void:
 	if raycast.is_colliding():
-		var collider = raycast.get_collider()
+		var collider: Object = raycast.get_collider()
 		if not collider:
 			return
 			
-		var point = raycast.get_collision_point()
-		var normal = raycast.get_collision_normal()
+		var point: Vector3 = raycast.get_collision_point()
+		var normal: Vector3 = raycast.get_collision_normal()
 		var block_coords: Vector3i = _get_hit_block(point, normal)
-		var chunk = collider.get_parent()
+		var chunk: Node = collider.get_parent()
 		
 		if chunk and chunk.has_method("check_block_selected"):
 			if chunk.check_block_selected(block_coords):
@@ -290,8 +290,9 @@ func _update_collision_radius() -> void:
 		return
 	
 	# Only update if moved more than half a chunk
-	var pos := global_position
-	if pos.distance_squared_to(_last_collision_update_pos) > VoxelConstants.COLLISION_UPDATE_THRESHOLD:  # 16^2 = half chunk
+	var pos: Vector3 = global_position
+	var distance_sq: float = pos.distance_squared_to(_last_collision_update_pos)
+	if distance_sq > VoxelConstants.COLLISION_UPDATE_THRESHOLD:
 		_last_collision_update_pos = pos
 		chunk_manager.update_collision_radius(pos)
 

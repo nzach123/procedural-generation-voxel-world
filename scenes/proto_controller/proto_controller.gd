@@ -302,7 +302,9 @@ func _try_activate_ability_by_input(event: InputEvent) -> bool:
 ## Modifies look_rotation based on rot_input, then resets basis and rotates by look_rotation.
 func rotate_look(rot_input : Vector2) -> void:
 	look_rotation.x -= rot_input.y * look_speed
-	look_rotation.x = clamp(look_rotation.x, deg_to_rad(-VoxelConstants.LOOK_ANGLE_LIMIT), deg_to_rad(VoxelConstants.LOOK_ANGLE_LIMIT))
+	var min_angle: float = deg_to_rad(-VoxelConstants.LOOK_ANGLE_LIMIT)
+	var max_angle: float = deg_to_rad(VoxelConstants.LOOK_ANGLE_LIMIT)
+	look_rotation.x = clamp(look_rotation.x, min_angle, max_angle)
 	look_rotation.y -= rot_input.x * look_speed
 	transform.basis = Basis()
 	rotate_y(look_rotation.y)
@@ -360,8 +362,9 @@ func _update_collision_radius() -> void:
 		return
 	
 	# Only update if moved more than half a chunk
-	var pos := global_position
-	if pos.distance_squared_to(_last_collision_update_pos) > VoxelConstants.COLLISION_UPDATE_THRESHOLD:  # 16^2 = half chunk
+	var pos: Vector3 = global_position
+	var distance_sq: float = pos.distance_squared_to(_last_collision_update_pos)
+	if distance_sq > VoxelConstants.COLLISION_UPDATE_THRESHOLD:
 		_last_collision_update_pos = pos
 		chunk_manager.update_collision_radius(pos)
 

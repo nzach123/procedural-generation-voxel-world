@@ -2,6 +2,9 @@
 ## GUT unit tests for chunk_manager.gd coordinate conversion and world management.
 extends GutTest
 
+# Explicit preload for static method access
+const VoxelDataGeneratorClass := preload("res://scripts/chunk/voxel_data_generator.gd")
+
 
 # -------------------------------------------------------------------
 # Coordinate Conversion Tests (Pure Functions - No Scene Tree)
@@ -106,7 +109,7 @@ func test_generate_voxel_data_threaded_returns_correct_size() -> void:
 	noise.noise_type = FastNoiseLite.TYPE_PERLIN
 	noise.seed = 12345
 	
-	var voxels := ChunkManager.generate_voxel_data_threaded(
+	var voxels := VoxelDataGeneratorClass.generate_voxel_data(
 		noise, Vector3.ZERO, 16
 	)
 	
@@ -118,7 +121,7 @@ func test_generate_voxel_data_threaded_has_solid_blocks() -> void:
 	noise.noise_type = FastNoiseLite.TYPE_PERLIN
 	noise.seed = 12345
 	
-	var voxels := ChunkManager.generate_voxel_data_threaded(
+	var voxels := VoxelDataGeneratorClass.generate_voxel_data(
 		noise, Vector3.ZERO, 16
 	)
 	
@@ -137,8 +140,8 @@ func test_is_air_local_within_bounds() -> void:
 	voxels.fill(0)
 	voxels[0] = 1  # Set origin to solid
 	
-	assert_false(ChunkManager._is_air_local(voxels, 0, 0, 0), "Origin should be solid")
-	assert_true(ChunkManager._is_air_local(voxels, 1, 0, 0), "Adjacent should be air")
+	assert_false(VoxelDataGeneratorClass.is_air_local(voxels, 0, 0, 0), "Origin should be solid")
+	assert_true(VoxelDataGeneratorClass.is_air_local(voxels, 1, 0, 0), "Adjacent should be air")
 
 
 func test_is_air_local_out_of_bounds_returns_true() -> void:
@@ -146,10 +149,10 @@ func test_is_air_local_out_of_bounds_returns_true() -> void:
 	voxels.resize(32768)
 	voxels.fill(1)  # All solid
 	
-	assert_true(ChunkManager._is_air_local(voxels, -1, 0, 0), "Negative X should be air")
-	assert_true(ChunkManager._is_air_local(voxels, 32, 0, 0), "X=32 should be air")
-	assert_true(ChunkManager._is_air_local(voxels, 0, -1, 0), "Negative Y should be air")
-	assert_true(ChunkManager._is_air_local(voxels, 0, 32, 0), "Y=32 should be air")
+	assert_true(VoxelDataGeneratorClass.is_air_local(voxels, -1, 0, 0), "Negative X should be air")
+	assert_true(VoxelDataGeneratorClass.is_air_local(voxels, 32, 0, 0), "X=32 should be air")
+	assert_true(VoxelDataGeneratorClass.is_air_local(voxels, 0, -1, 0), "Negative Y should be air")
+	assert_true(VoxelDataGeneratorClass.is_air_local(voxels, 0, 32, 0), "Y=32 should be air")
 
 
 # -------------------------------------------------------------------
@@ -161,7 +164,7 @@ func test_generate_mesh_arrays_threaded_empty_for_air() -> void:
 	voxels.resize(32768)
 	voxels.fill(0)  # All air
 	
-	var result := ChunkManager.generate_mesh_arrays_threaded(
+	var result := VoxelDataGeneratorClass.generate_mesh_arrays(
 		voxels, Vector3.ZERO, Color.WHITE
 	)
 	
@@ -177,7 +180,7 @@ func test_generate_mesh_arrays_threaded_single_block() -> void:
 	var idx: int = 16 + 16 * 32 + 16 * 32 * 32
 	voxels[idx] = 1
 	
-	var result := ChunkManager.generate_mesh_arrays_threaded(
+	var result := VoxelDataGeneratorClass.generate_mesh_arrays(
 		voxels, Vector3.ZERO, Color.WHITE
 	)
 	
@@ -197,7 +200,7 @@ func test_generate_mesh_arrays_threaded_face_culling() -> void:
 	voxels[idx1] = 1
 	voxels[idx2] = 1
 	
-	var result := ChunkManager.generate_mesh_arrays_threaded(
+	var result := VoxelDataGeneratorClass.generate_mesh_arrays(
 		voxels, Vector3.ZERO, Color.WHITE
 	)
 	
