@@ -8,9 +8,7 @@ class_name ChunkServer
 extends RefCounted
 
 
-# -------------------------------------------------------------------
-# Constants
-# -------------------------------------------------------------------
+# -- Constants --
 
 const WIDTH: int = 32
 const HEIGHT: int = 32
@@ -23,9 +21,7 @@ const AIR_ID: int = 0
 const AABB_MARGIN: float = 0.1
 
 
-# -------------------------------------------------------------------
-# Public State
-# -------------------------------------------------------------------
+# -- Public State --
 
 ## Grid key for this chunk (x, z coordinates in chunk space).
 var key: Vector2i = Vector2i.ZERO
@@ -43,9 +39,7 @@ var collision_layer: int = 1
 var collision_mask: int = 1
 
 
-# -------------------------------------------------------------------
-# Private State
-# -------------------------------------------------------------------
+# -- Private State --
 
 ## Flat voxel storage: ID at position = voxels[x + z*WIDTH + y*WIDTH*DEPTH]
 var _voxels: PackedByteArray
@@ -78,9 +72,7 @@ var _scenario: RID
 var _material: RID
 
 
-# -------------------------------------------------------------------
-# Lifecycle
-# -------------------------------------------------------------------
+# -- Lifecycle --
 
 func _init() -> void:
 	_voxels.resize(VOLUME)
@@ -111,9 +103,7 @@ func destroy() -> void:
 	_free_physics_rids()
 
 
-# -------------------------------------------------------------------
-# Public API: Voxel Access
-# -------------------------------------------------------------------
+# -- Public API: Voxel Access --
 
 ## Returns the block ID at local coordinates.
 func get_voxel(x: int, y: int, z: int) -> int:
@@ -140,9 +130,7 @@ func get_voxels_raw() -> PackedByteArray:
 	return _voxels.duplicate()
 
 
-# -------------------------------------------------------------------
-# Public API: Mesh
-# -------------------------------------------------------------------
+# -- Public API: Mesh --
 
 ## Applies pre-generated mesh arrays and creates RenderingServer instances.
 ## @param mesh_data: Dictionary with vertices, uvs, colors, normals, indices, triangle_count
@@ -199,17 +187,12 @@ func get_triangle_count() -> int:
 	return _triangle_count
 
 
-# -------------------------------------------------------------------
-# Public API: Collision
-# -------------------------------------------------------------------
+# -- Public API: Collision --
 
 ## Enables or disables collision for this chunk (lazy collision).
 ## @param enabled: Whether collision should be active
 ## @param space: World3D physics space RID
 func set_collision_enabled(enabled: bool, space: RID) -> void:
-	if enabled == _collision_enabled:
-		return
-	
 	if enabled == _collision_enabled:
 		return
 	
@@ -232,9 +215,7 @@ func is_collision_enabled() -> bool:
 	return _collision_enabled
 
 
-# -------------------------------------------------------------------
-# Public API: Gameplay Interaction
-# -------------------------------------------------------------------
+# -- Public API: Gameplay --
 
 ## Checks if the block at global coordinates is selected (highlighted).
 func check_block_selected(global_coords: Vector3i) -> bool:
@@ -280,9 +261,7 @@ func _update_mesh() -> void:
 		_build_collision(PhysicsServer3D.body_get_space(_body_rid))
 
 
-# -------------------------------------------------------------------
-# Private: RID Management
-# -------------------------------------------------------------------
+# -- Private: RID Management --
 
 ## Calculates custom AABB with margin for frustum culling.
 func _calculate_aabb() -> AABB:
@@ -367,9 +346,7 @@ func _build_collision(space: RID) -> void:
 	# GrappleAbility will look up chunks via ChunkManager.get_chunk_at_world_pos() instead
 
 
-# -------------------------------------------------------------------
-# Private: Indexing
-# -------------------------------------------------------------------
+# -- Private: Indexing --
 
 ## Converts 3D coordinates to flat array index.
 func _index(x: int, y: int, z: int) -> int:

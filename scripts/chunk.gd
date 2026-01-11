@@ -4,18 +4,16 @@
 class_name Chunk
 extends Node3D
 
+# Explicit preload for static method access
+const MeshBuilder := preload("res://scripts/chunk/mesh_builder.gd")
 
-# -------------------------------------------------------------------
-# Signals
-# -------------------------------------------------------------------
+# -- Signals --
 
 signal mesh_updated(chunk: Chunk, triangle_count: int)
 signal border_update_requested(neighbor_key: Vector2i)
 
 
-# -------------------------------------------------------------------
-# Constants
-# -------------------------------------------------------------------
+# -- Constants --
 
 const WIDTH: int = 32
 const HEIGHT: int = 32
@@ -25,9 +23,7 @@ const VOLUME: int = WIDTH * HEIGHT * DEPTH  # 32,768 voxels
 const AIR_ID: int = 0
 
 
-# -------------------------------------------------------------------
-# Exports
-# -------------------------------------------------------------------
+# -- Exports --
 
 ## Reference to the ChunkManager that owns this chunk.
 @export var chunk_manager: Node
@@ -36,9 +32,7 @@ const AIR_ID: int = 0
 @export var key: Vector2i = Vector2i.ZERO
 
 
-# -------------------------------------------------------------------
-# Public Variables
-# -------------------------------------------------------------------
+# -- Public Variables --
 
 ## World-space offset of this chunk's origin (0,0,0 corner).
 var chunk_offset: Vector3 = Vector3.ZERO
@@ -46,20 +40,14 @@ var chunk_offset: Vector3 = Vector3.ZERO
 ## Chunk color tint for debugging.
 var chunk_color: Color = Color.WHITE
 
-
-# -------------------------------------------------------------------
-# Private Variables
-# -------------------------------------------------------------------
+# -- Private Variables --
 
 ## Flat voxel storage: ID at position = voxels[x + z*WIDTH + y*WIDTH*DEPTH]
 var _voxels: PackedByteArray
 
-## Mesh arrays for direct ArrayMesh generation.
-var _mesh_instance: MeshInstance3D
+var _mesh_instance: MeshInstance3D  ## Mesh arrays for ArrayMesh generation
 var _collision_body: StaticBody3D
-
-## Triangle count for stats.
-var _triangle_count: int = 0
+var _triangle_count: int = 0        ## Triangle count for stats
 
 ## Atlas configuration.
 var _tiles_per_row: int = 2
@@ -72,9 +60,7 @@ var _collision_enabled: bool = false
 var _mesh_dirty: bool = false
 
 
-# -------------------------------------------------------------------
-# Lifecycle
-# -------------------------------------------------------------------
+# -- Lifecycle --
 
 func _ready() -> void:
 	_voxels.resize(VOLUME)
@@ -96,9 +82,7 @@ func _ready() -> void:
 	_mesh_instance.material_override = material
 
 
-# -------------------------------------------------------------------
-# Public API
-# -------------------------------------------------------------------
+# -- Public API --
 
 ## Returns the block ID at local coordinates.
 func get_voxel(x: int, y: int, z: int) -> int:
@@ -155,39 +139,21 @@ func apply_mesh_arrays(mesh_data: Dictionary) -> void:
 	mesh_updated.emit(self, _triangle_count)
 
 
-## Initializes voxel data using noise-based terrain generation.
-func init_data(noise: FastNoiseLite, max_height: int = 16) -> void:
-	for x in range(WIDTH):
-		for z in range(DEPTH):
-			var world_x: float = x + chunk_offset.x
-			var world_z: float = z + chunk_offset.z
-			
-			var height: int = int((noise.get_noise_2d(world_x, world_z) + 1.0) * 0.5 * max_height)
-			height = clampi(height, 0, HEIGHT - 1)
-			
-			for y in range(HEIGHT):
-				var block_id: int = AIR_ID
-				if y < height:
-					block_id = BlockDefinitions.BlockType.DIRT
-				elif y == height:
-					if y > VoxelConstants.STONE_LAYER_HEIGHT:
-						block_id = BlockDefinitions.BlockType.STONE
-					else:
-						block_id = BlockDefinitions.BlockType.GRASS
-				
-				set_voxel(x, y, z, block_id)
-
-
 ## Builds the mesh from current voxel data using direct ArrayMesh.
 func build_mesh() -> void:
-	var verts := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var colors := PackedColorArray()
-	var normals := PackedVector3Array()
-	var indices := PackedInt32Array()
-	
+	var arrays := MeshBuilder.create_arrays()
 	_triangle_count = 0
 	var vertex_index: int = 0
+	
+	# Face neighbor offsets for visibility checks
+	var face_offsets := {
+		BlockDefinitions.Face.POS_X: Vector3i(1, 0, 0),
+		BlockDefinitions.Face.NEG_X: Vector3i(-1, 0, 0),
+		BlockDefinitions.Face.POS_Y: Vector3i(0, 1, 0),
+		BlockDefinitions.Face.NEG_Y: Vector3i(0, -1, 0),
+		BlockDefinitions.Face.POS_Z: Vector3i(0, 0, 1),
+		BlockDefinitions.Face.NEG_Z: Vector3i(0, 0, -1),
+	}
 	
 	for y in range(HEIGHT):
 		for z in range(DEPTH):
@@ -199,96 +165,24 @@ func build_mesh() -> void:
 				var pos := Vector3(x, y, z) + chunk_offset
 				
 				# Check each face for visibility
-				# +X face
-				if _is_transparent(x + 1, y, z):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(0.5, -0.5, 0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(0.5, -0.5, -0.5),
-						Vector3.RIGHT, block_id, BlockDefinitions.Face.POS_X
-					)
-					vertex_index += 4
-					_triangle_count += 2
-				
-				# -X face
-				if _is_transparent(x - 1, y, z):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(-0.5, -0.5, 0.5),
-						Vector3.LEFT, block_id, BlockDefinitions.Face.NEG_X
-					)
-					vertex_index += 4
-					_triangle_count += 2
-				
-				# +Y face
-				if _is_transparent(x, y + 1, z):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						Vector3.UP, block_id, BlockDefinitions.Face.POS_Y
-					)
-					vertex_index += 4
-					_triangle_count += 2
-				
-				# -Y face
-				if _is_transparent(x, y - 1, z):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, -0.5),
-						pos + Vector3(-0.5, -0.5, 0.5),
-						pos + Vector3(0.5, -0.5, 0.5),
-						pos + Vector3(0.5, -0.5, -0.5),
-						Vector3.DOWN, block_id, BlockDefinitions.Face.NEG_Y
-					)
-					vertex_index += 4
-					_triangle_count += 2
-				
-				# +Z face
-				if _is_transparent(x, y, z + 1):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, 0.5),
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						pos + Vector3(0.5, -0.5, 0.5),
-						Vector3.BACK, block_id, BlockDefinitions.Face.POS_Z
-					)
-					vertex_index += 4
-					_triangle_count += 2
-				
-				# -Z face
-				if _is_transparent(x, y, z - 1):
-					_add_face_arrays(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(0.5, -0.5, -0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, -0.5, -0.5),
-						Vector3.FORWARD, block_id, BlockDefinitions.Face.NEG_Z
-					)
-					vertex_index += 4
-					_triangle_count += 2
+				for face in face_offsets:
+					var offset: Vector3i = face_offsets[face]
+					if _is_transparent(x + offset.x, y + offset.y, z + offset.z):
+						vertex_index += MeshBuilder.add_face(arrays, vertex_index, pos, face, block_id, chunk_color, _tiles_per_row)
+						_triangle_count += 2
 	
 	# Commit mesh
-	if verts.size() > 0:
-		var arrays: Array = []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = verts
-		arrays[Mesh.ARRAY_TEX_UV] = uvs
-		arrays[Mesh.ARRAY_COLOR] = colors
-		arrays[Mesh.ARRAY_NORMAL] = normals
-		arrays[Mesh.ARRAY_INDEX] = indices
+	if arrays.verts.size() > 0:
+		var mesh_arrays: Array = []
+		mesh_arrays.resize(Mesh.ARRAY_MAX)
+		mesh_arrays[Mesh.ARRAY_VERTEX] = arrays.verts
+		mesh_arrays[Mesh.ARRAY_TEX_UV] = arrays.uvs
+		mesh_arrays[Mesh.ARRAY_COLOR] = arrays.colors
+		mesh_arrays[Mesh.ARRAY_NORMAL] = arrays.normals
+		mesh_arrays[Mesh.ARRAY_INDEX] = arrays.indices
 		
 		var array_mesh := ArrayMesh.new()
-		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 		_mesh_instance.mesh = array_mesh
 		
 		_build_collision()
@@ -396,9 +290,7 @@ func get_triangle_count() -> int:
 	return _triangle_count
 
 
-# -------------------------------------------------------------------
-# Private Helpers
-# -------------------------------------------------------------------
+# -- Private Helpers --
 
 ## Converts 3D coordinates to flat array index.
 func _index(x: int, y: int, z: int) -> int:
@@ -447,62 +339,6 @@ func _check_border(local: Vector3i) -> void:
 		border_update_requested.emit(key + Vector2i(0, -1))
 	elif local.z == DEPTH - 1:
 		border_update_requested.emit(key + Vector2i(0, 1))
-
-
-## Adds a quad face to the mesh arrays.
-func _add_face_arrays(
-	verts: PackedVector3Array,
-	uvs: PackedVector2Array,
-	colors: PackedColorArray,
-	normals: PackedVector3Array,
-	indices: PackedInt32Array,
-	base_index: int,
-	v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3,
-	normal: Vector3,
-	block_id: int,
-	face: int
-) -> void:
-	# Add vertices
-	verts.append(v0)
-	verts.append(v1)
-	verts.append(v2)
-	verts.append(v3)
-	
-	# Add normals
-	normals.append(normal)
-	normals.append(normal)
-	normals.append(normal)
-	normals.append(normal)
-	
-	# Add colors
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	
-	# Calculate UVs from atlas
-	var tile_index: int = 0
-	if BlockDefinitions.BLOCK_TILES.has(block_id):
-		var face_map: Dictionary = BlockDefinitions.BLOCK_TILES[block_id]
-		if face_map.has(face):
-			tile_index = face_map[face]
-	
-	var col: int = tile_index % _tiles_per_row
-	var row: int = tile_index / _tiles_per_row
-	var base_uv := Vector2(col * _tile_size, row * _tile_size)
-	
-	uvs.append(base_uv + Vector2(0, _tile_size))
-	uvs.append(base_uv + Vector2(0, 0))
-	uvs.append(base_uv + Vector2(_tile_size, 0))
-	uvs.append(base_uv + Vector2(_tile_size, _tile_size))
-	
-	# Add indices (two triangles)
-	indices.append(base_index + 0)
-	indices.append(base_index + 1)
-	indices.append(base_index + 2)
-	indices.append(base_index + 0)
-	indices.append(base_index + 2)
-	indices.append(base_index + 3)
 
 
 ## Builds collision shape from mesh (only if collision is enabled).

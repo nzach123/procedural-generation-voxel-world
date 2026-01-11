@@ -5,6 +5,9 @@
 class_name ChunkManager
 extends Node
 
+# Explicit preload for static method access
+const MeshBuilderClass := preload("res://scripts/chunk/mesh_builder.gd")
+
 
 # -------------------------------------------------------------------
 # Signals
@@ -346,15 +349,19 @@ static func generate_mesh_arrays_threaded(
 	chunk_color: Color,
 	tiles_per_row: int = 2
 ) -> Dictionary:
-	var verts := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var colors := PackedColorArray()
-	var normals := PackedVector3Array()
-	var indices := PackedInt32Array()
-	
+	var arrays := MeshBuilderClass.create_arrays()
 	var triangle_count: int = 0
 	var vertex_index: int = 0
-	var tile_size: float = 1.0 / tiles_per_row
+	
+	# Face neighbor offsets for visibility checks
+	var face_offsets := {
+		BlockDefinitions.Face.POS_X: Vector3i(1, 0, 0),
+		BlockDefinitions.Face.NEG_X: Vector3i(-1, 0, 0),
+		BlockDefinitions.Face.POS_Y: Vector3i(0, 1, 0),
+		BlockDefinitions.Face.NEG_Y: Vector3i(0, -1, 0),
+		BlockDefinitions.Face.POS_Z: Vector3i(0, 0, 1),
+		BlockDefinitions.Face.NEG_Z: Vector3i(0, 0, -1),
+	}
 	
 	for y in range(CHUNK_HEIGHT):
 		for z in range(CHUNK_DEPTH):
@@ -366,99 +373,14 @@ static func generate_mesh_arrays_threaded(
 				
 				var pos := Vector3(x, y, z) + chunk_offset
 				
-				# Check each face for visibility (no cross-chunk checks in thread)
-				# +X face
-				if _is_air_local(voxels, x + 1, y, z):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(0.5, -0.5, 0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(0.5, -0.5, -0.5),
-						Vector3.RIGHT, chunk_color, block_id, 
-						BlockDefinitions.Face.POS_X, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
-				
-				# -X face
-				if _is_air_local(voxels, x - 1, y, z):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(-0.5, -0.5, 0.5),
-						Vector3.LEFT, chunk_color, block_id,
-						BlockDefinitions.Face.NEG_X, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
-				
-				# +Y face
-				if _is_air_local(voxels, x, y + 1, z):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						Vector3.UP, chunk_color, block_id,
-						BlockDefinitions.Face.POS_Y, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
-				
-				# -Y face
-				if _is_air_local(voxels, x, y - 1, z):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, -0.5),
-						pos + Vector3(-0.5, -0.5, 0.5),
-						pos + Vector3(0.5, -0.5, 0.5),
-						pos + Vector3(0.5, -0.5, -0.5),
-						Vector3.DOWN, chunk_color, block_id,
-						BlockDefinitions.Face.NEG_Y, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
-				
-				# +Z face
-				if _is_air_local(voxels, x, y, z + 1):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(-0.5, -0.5, 0.5),
-						pos + Vector3(-0.5, 0.5, 0.5),
-						pos + Vector3(0.5, 0.5, 0.5),
-						pos + Vector3(0.5, -0.5, 0.5),
-						Vector3.BACK, chunk_color, block_id,
-						BlockDefinitions.Face.POS_Z, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
-				
-				# -Z face
-				if _is_air_local(voxels, x, y, z - 1):
-					_add_face_static(
-						verts, uvs, colors, normals, indices, vertex_index,
-						pos + Vector3(0.5, -0.5, -0.5),
-						pos + Vector3(0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, 0.5, -0.5),
-						pos + Vector3(-0.5, -0.5, -0.5),
-						Vector3.FORWARD, chunk_color, block_id,
-						BlockDefinitions.Face.NEG_Z, tile_size, tiles_per_row
-					)
-					vertex_index += 4
-					triangle_count += 2
+				# Check each face for visibility
+				for face in face_offsets:
+					var offset: Vector3i = face_offsets[face]
+					if _is_air_local(voxels, x + offset.x, y + offset.y, z + offset.z):
+						vertex_index += MeshBuilderClass.add_face(arrays, vertex_index, pos, face, block_id, chunk_color, tiles_per_row)
+						triangle_count += 2
 	
-	return {
-		"vertices": verts,
-		"uvs": uvs,
-		"colors": colors,
-		"normals": normals,
-		"indices": indices,
-		"triangle_count": triangle_count
-	}
+	return MeshBuilderClass.to_mesh_data(arrays, triangle_count)
 
 
 ## Helper: Check if local position is air (thread-safe, no cross-chunk).
@@ -467,65 +389,6 @@ static func _is_air_local(voxels: PackedByteArray, x: int, y: int, z: int) -> bo
 		return true  # Treat boundary as air for initial mesh
 	var idx: int = x + z * CHUNK_WIDTH + y * CHUNK_WIDTH * CHUNK_DEPTH
 	return voxels[idx] == 0
-
-
-## Helper: Add face to arrays (static, thread-safe).
-static func _add_face_static(
-	verts: PackedVector3Array,
-	uvs: PackedVector2Array,
-	colors: PackedColorArray,
-	normals: PackedVector3Array,
-	indices: PackedInt32Array,
-	base_index: int,
-	v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3,
-	normal: Vector3,
-	chunk_color: Color,
-	block_id: int,
-	face: int,
-	tile_size: float,
-	tiles_per_row: int
-) -> void:
-	# Add vertices
-	verts.append(v0)
-	verts.append(v1)
-	verts.append(v2)
-	verts.append(v3)
-	
-	# Add normals
-	normals.append(normal)
-	normals.append(normal)
-	normals.append(normal)
-	normals.append(normal)
-	
-	# Add colors
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	colors.append(chunk_color)
-	
-	# Calculate UVs from atlas
-	var tile_index: int = 0
-	if BlockDefinitions.BLOCK_TILES.has(block_id):
-		var face_map: Dictionary = BlockDefinitions.BLOCK_TILES[block_id]
-		if face_map.has(face):
-			tile_index = face_map[face]
-	
-	var col: int = tile_index % tiles_per_row
-	var row: int = tile_index / tiles_per_row
-	var base_uv := Vector2(col * tile_size, row * tile_size)
-	
-	uvs.append(base_uv + Vector2(0, tile_size))
-	uvs.append(base_uv + Vector2(0, 0))
-	uvs.append(base_uv + Vector2(tile_size, 0))
-	uvs.append(base_uv + Vector2(tile_size, tile_size))
-	
-	# Add indices (two triangles)
-	indices.append(base_index + 0)
-	indices.append(base_index + 1)
-	indices.append(base_index + 2)
-	indices.append(base_index + 0)
-	indices.append(base_index + 2)
-	indices.append(base_index + 3)
 
 
 # -------------------------------------------------------------------
