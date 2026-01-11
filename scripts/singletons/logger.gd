@@ -7,14 +7,14 @@ extends RefCounted
 
 
 ## Set to false for release builds (or use: OS.is_debug_build())
-const DEBUG_ENABLED: bool = true
+const LOGGING_ENABLED: bool = true
 
 
 ## Logs a debug message with optional context prefix.
 ## @param msg The message to log.
 ## @param ctx Optional context string (e.g., "ChunkManager", "PERF").
 static func debug(msg: String, ctx: String = "") -> void:
-	if DEBUG_ENABLED:
+	if LOGGING_ENABLED:
 		if ctx.is_empty():
 			print(msg)
 		else:

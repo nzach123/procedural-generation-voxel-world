@@ -50,12 +50,12 @@ h2 { color: #888; font-size: 1.2em; margin: 20px 0 10px; border-bottom: 1px soli
 </div>
 
 <div class="summary">
-<div class="stat-card"><div class="value">36</div><div class="label">Files Analyzed</div></div>
-<div class="stat-card"><div class="value">6731</div><div class="label">Lines of Code</div></div>
-<div class="stat-card critical"><div class="value">9</div><div class="label">Critical Issues</div></div>
-<div class="stat-card warning"><div class="value">41</div><div class="label">Warnings</div></div>
+<div class="stat-card"><div class="value">35</div><div class="label">Files Analyzed</div></div>
+<div class="stat-card"><div class="value">6449</div><div class="label">Lines of Code</div></div>
+<div class="stat-card critical"><div class="value">7</div><div class="label">Critical Issues</div></div>
+<div class="stat-card warning"><div class="value">32</div><div class="label">Warnings</div></div>
 <div class="stat-card info"><div class="value">324</div><div class="label">Info</div></div>
-<div class="stat-card"><div class="value">695</div><div class="label">Debt Score</div></div>
+<div class="stat-card"><div class="value">595</div><div class="label">Debt Score</div></div>
 </div>
 
 <div class="filters">
@@ -76,23 +76,20 @@ h2 { color: #888; font-size: 1.2em; margin: 20px 0 10px; border-bottom: 1px soli
 </div>
 
 <div id="issuesContainer">
-<div class="issues-section" data-severity="critical"><div class="section-header critical"><span class="icon">🔴</span><h2>Critical Issues (<span class="count">9</span>)</h2></div>
-<div class="issue" data-severity="critical" data-type="file-length" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:1</span><span class="message">File exceeds 300 lines (377)</span><span class="check-id">file-length</span></div>
-<div class="issue" data-severity="critical" data-type="high-complexity" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:94</span><span class="message">Function '_unhandled_input' has complexity 17 (max 15)</span><span class="check-id">high-complexity</span></div>
+<div class="issues-section" data-severity="critical"><div class="section-header critical"><span class="icon">🔴</span><h2>Critical Issues (<span class="count">7</span>)</h2></div>
+<div class="issue" data-severity="critical" data-type="file-length" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:1</span><span class="message">File exceeds 300 lines (400)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="critical" data-type="long-function" data-file="res://scenes/proto_controller/proto_input_handler.gd"><span class="location">res://scenes/proto_controller/proto_input_handler.gd:14</span><span class="message">Function '_init' exceeds 60 lines (69)</span><span class="check-id">long-function</span></div>
 <div class="issue" data-severity="critical" data-type="high-complexity" data-file="res://scenes/proto_controller/proto_input_handler.gd"><span class="location">res://scenes/proto_controller/proto_input_handler.gd:14</span><span class="message">Function '_init' has complexity 18 (max 15)</span><span class="check-id">high-complexity</span></div>
 <div class="issue" data-severity="critical" data-type="long-function" data-file="res://scripts/chunk/visibility_manager.gd"><span class="location">res://scripts/chunk/visibility_manager.gd:33</span><span class="message">Function 'update_collision_radius' exceeds 60 lines (90)</span><span class="check-id">long-function</span></div>
 <div class="issue" data-severity="critical" data-type="file-length" data-file="res://scripts/chunk.gd"><span class="location">res://scripts/chunk.gd:1</span><span class="message">File exceeds 300 lines (374)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="critical" data-type="file-length" data-file="res://scripts/chunk_manager.gd"><span class="location">res://scripts/chunk_manager.gd:1</span><span class="message">File exceeds 300 lines (840)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="critical" data-type="file-length" data-file="res://scripts/chunk_server.gd"><span class="location">res://scripts/chunk_server.gd:1</span><span class="message">File exceeds 300 lines (354)</span><span class="check-id">file-length</span></div>
-<div class="issue" data-severity="critical" data-type="file-length" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:1</span><span class="message">File exceeds 300 lines (305)</span><span class="check-id">file-length</span></div>
 </div>
-<div class="issues-section" data-severity="warning"><div class="section-header warning"><span class="icon">🟡</span><h2>Warnings (<span class="count">41</span>)</h2></div>
+<div class="issues-section" data-severity="warning"><div class="section-header warning"><span class="icon">🟡</span><h2>Warnings (<span class="count">32</span>)</h2></div>
 <div class="issue" data-severity="warning" data-type="long-function" data-file="res://scenes/proto_controller/movement_controller.gd"><span class="location">res://scenes/proto_controller/movement_controller.gd:67</span><span class="message">Function 'process_ground_movement' exceeds 30 lines (39)</span><span class="check-id">long-function</span></div>
 <div class="issue" data-severity="warning" data-type="high-complexity" data-file="res://scenes/proto_controller/movement_controller.gd"><span class="location">res://scenes/proto_controller/movement_controller.gd:67</span><span class="message">Function 'process_ground_movement' has complexity 11 (warning at 10)</span><span class="check-id">high-complexity</span></div>
-<div class="issue" data-severity="warning" data-type="long-function" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:94</span><span class="message">Function '_unhandled_input' exceeds 30 lines (35)</span><span class="check-id">long-function</span></div>
-<div class="issue" data-severity="warning" data-type="long-function" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:168</span><span class="message">Function '_process_ground_movement' exceeds 30 lines (35)</span><span class="check-id">long-function</span></div>
-<div class="issue" data-severity="warning" data-type="deep-nesting" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:282</span><span class="message">Function '_try_activate_ability_by_input' has 4 nesting levels (max 3)</span><span class="check-id">deep-nesting</span></div>
+<div class="issue" data-severity="warning" data-type="long-function" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:191</span><span class="message">Function '_process_ground_movement' exceeds 30 lines (35)</span><span class="check-id">long-function</span></div>
+<div class="issue" data-severity="warning" data-type="deep-nesting" data-file="res://scenes/proto_controller/proto_controller.gd"><span class="location">res://scenes/proto_controller/proto_controller.gd:305</span><span class="message">Function '_try_activate_ability_by_input' has 4 nesting levels (max 3)</span><span class="check-id">deep-nesting</span></div>
 <div class="issue" data-severity="warning" data-type="file-length" data-file="res://scripts/abilities/grapple_ability.gd"><span class="location">res://scripts/abilities/grapple_ability.gd:1</span><span class="message">File exceeds 200 lines (267)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="warning" data-type="long-function" data-file="res://scripts/abilities/grapple_ability.gd"><span class="location">res://scripts/abilities/grapple_ability.gd:141</span><span class="message">Function '_try_attach' exceeds 30 lines (39)</span><span class="check-id">long-function</span></div>
 <div class="issue" data-severity="warning" data-type="high-complexity" data-file="res://scripts/chunk/visibility_manager.gd"><span class="location">res://scripts/chunk/visibility_manager.gd:33</span><span class="message">Function 'update_collision_radius' has complexity 11 (warning at 10)</span><span class="check-id">high-complexity</span></div>
@@ -107,13 +104,6 @@ h2 { color: #888; font-size: 1.2em; margin: 20px 0 10px; border-bottom: 1px soli
 <div class="issue" data-severity="warning" data-type="file-length" data-file="res://scripts/chunk_serializer.gd"><span class="location">res://scripts/chunk_serializer.gd:1</span><span class="message">File exceeds 200 lines (212)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="warning" data-type="long-function" data-file="res://scripts/chunk_server.gd"><span class="location">res://scripts/chunk_server.gd:139</span><span class="message">Function 'apply_mesh' exceeds 30 lines (47)</span><span class="check-id">long-function</span></div>
 <div class="issue" data-severity="warning" data-type="long-function" data-file="res://scripts/chunk_server.gd"><span class="location">res://scripts/chunk_server.gd:307</span><span class="message">Function '_build_collision' exceeds 30 lines (45)</span><span class="check-id">long-function</span></div>
-<div class="issue" data-severity="warning" data-type="todo-comment" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:68</span><span class="message">BUG: _DRAW_WIREFRAME:</span><span class="check-id">todo-comment</span></div>
-<div class="issue" data-severity="warning" data-type="todo-comment" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:69</span><span class="message">BUG: _DRAW_DISABLED</span><span class="check-id">todo-comment</span></div>
-<div class="issue" data-severity="warning" data-type="todo-comment" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:71</span><span class="message">BUG: _DRAW_WIREFRAME</span><span class="check-id">todo-comment</span></div>
-<div class="issue" data-severity="warning" data-type="high-complexity" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:61</span><span class="message">Function '_unhandled_input' has complexity 13 (warning at 10)</span><span class="check-id">high-complexity</span></div>
-<div class="issue" data-severity="warning" data-type="deep-nesting" data-file="res://scripts/player.gd"><span class="location">res://scripts/player.gd:211</span><span class="message">Function '_handle_block_place' has 4 nesting levels (max 3)</span><span class="check-id">deep-nesting</span></div>
-<div class="issue" data-severity="warning" data-type="todo-comment" data-file="res://scripts/singletons/logger.gd"><span class="location">res://scripts/singletons/logger.gd:10</span><span class="message">BUG: _ENABLED: bool = true</span><span class="check-id">todo-comment</span></div>
-<div class="issue" data-severity="warning" data-type="todo-comment" data-file="res://scripts/singletons/logger.gd"><span class="location">res://scripts/singletons/logger.gd:17</span><span class="message">BUG: _ENABLED:</span><span class="check-id">todo-comment</span></div>
 <div class="issue" data-severity="warning" data-type="god-class-functions" data-file="res://test/unit/abilities/test_grapple_ability.gd"><span class="location">res://test/unit/abilities/test_grapple_ability.gd:1</span><span class="message">God class: 21 public functions (max 20)</span><span class="check-id">god-class-functions</span></div>
 <div class="issue" data-severity="warning" data-type="deep-nesting" data-file="res://test/unit/chunk/test_chunk.gd"><span class="location">res://test/unit/chunk/test_chunk.gd:173</span><span class="message">Function 'test_flat_index_formula_consistency' has 4 nesting levels (max 3)</span><span class="check-id">deep-nesting</span></div>
 <div class="issue" data-severity="warning" data-type="god-class-functions" data-file="res://test/unit/chunk/test_chunk.gd"><span class="location">res://test/unit/chunk/test_chunk.gd:1</span><span class="message">God class: 21 public functions (max 20)</span><span class="check-id">god-class-functions</span></div>
@@ -128,7 +118,6 @@ h2 { color: #888; font-size: 1.2em; margin: 20px 0 10px; border-bottom: 1px soli
 <div class="issue" data-severity="warning" data-type="file-length" data-file="res://test/unit/integration/test_player_integration.gd"><span class="location">res://test/unit/integration/test_player_integration.gd:1</span><span class="message">File exceeds 200 lines (266)</span><span class="check-id">file-length</span></div>
 <div class="issue" data-severity="warning" data-type="god-class-functions" data-file="res://test/unit/integration/test_player_integration.gd"><span class="location">res://test/unit/integration/test_player_integration.gd:1</span><span class="message">God class: 23 public functions (max 20)</span><span class="check-id">god-class-functions</span></div>
 <div class="issue" data-severity="warning" data-type="god-class-functions" data-file="res://test/unit/resources/test_interaction_context.gd"><span class="location">res://test/unit/resources/test_interaction_context.gd:1</span><span class="message">God class: 21 public functions (max 20)</span><span class="check-id">god-class-functions</span></div>
-<div class="issue" data-severity="warning" data-type="unused-variable" data-file="res://test/unit/resources/test_interaction_context.gd"><span class="location">res://test/unit/resources/test_interaction_context.gd:164</span><span class="message">Loop variable 'i' is declared but never used</span><span class="check-id">unused-variable</span></div>
 </div>
 <div class="issues-section" data-severity="info"><div class="section-header info"><span class="icon">🔵</span><h2>Info (<span class="count">324</span>)</h2></div>
 <div class="issue" data-severity="info" data-type="unused-parameter" data-file="res://scripts/abilities/ability.gd"><span class="location">res://scripts/abilities/ability.gd:78</span><span class="message">Parameter 'event' is declared but never used</span><span class="check-id">unused-parameter</span></div>
@@ -460,14 +449,14 @@ h2 { color: #888; font-size: 1.2em; margin: 20px 0 10px; border-bottom: 1px soli
 <div id="noResults" class="no-results" style="display:none;">No issues match the current filters</div>
 
 <div class="footer">
-<p>Generated by <a href="https://poplava.itch.io">GDScript Linter</a> in 409ms</p>
+<p>Generated by <a href="https://poplava.itch.io">GDScript Linter</a> in 397ms</p>
 </div>
 </div>
 
 <script>
 // Type name mapping and severity->types data for linked filtering
-const TYPE_NAMES = {"long-function":"Long Function","high-complexity":"High Complexity","file-length":"File Length","deep-nesting":"Deep Nesting","unused-parameter":"Unused Parameter","magic-number":"Magic Number","long-line":"Long Line","missing-return-type":"Missing Return Type","todo-comment":"TODO/FIXME","god-class-functions":"god-class-functions","unused-variable":"Unused Variable"};
-const SEVERITY_TYPES = {"all":["deep-nesting","file-length","god-class-functions","high-complexity","long-function","long-line","magic-number","missing-return-type","todo-comment","unused-parameter","unused-variable"],"critical":["file-length","high-complexity","long-function"],"warning":["deep-nesting","file-length","god-class-functions","high-complexity","long-function","todo-comment","unused-variable"],"info":["long-line","magic-number","missing-return-type","unused-parameter"]};
+const TYPE_NAMES = {"long-function":"Long Function","high-complexity":"High Complexity","file-length":"File Length","deep-nesting":"Deep Nesting","unused-parameter":"Unused Parameter","magic-number":"Magic Number","long-line":"Long Line","missing-return-type":"Missing Return Type","god-class-functions":"god-class-functions"};
+const SEVERITY_TYPES = {"all":["deep-nesting","file-length","god-class-functions","high-complexity","long-function","long-line","magic-number","missing-return-type","unused-parameter"],"critical":["file-length","high-complexity","long-function"],"warning":["deep-nesting","file-length","god-class-functions","high-complexity","long-function"],"info":["long-line","magic-number","missing-return-type","unused-parameter"]};
 
 function populateTypeFilter(severity) {
 	const typeFilter = document.getElementById('typeFilter');

@@ -161,7 +161,7 @@ func test_pool_respects_max_size() -> void:
 	var contexts: Array[InteractionContext] = []
 	
 	# Rent more than MAX_POOL_SIZE
-	for i in range(40):
+	for _ in range(40):
 		contexts.append(InteractionContext.rent())
 	
 	# Release all

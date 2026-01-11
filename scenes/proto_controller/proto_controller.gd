@@ -94,34 +94,57 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# Delegate to active ability first
 	if _active_ability and _active_ability.input(event):
-		return  # Ability consumed the input
+		return
 	
 	# Check if any ability wants to activate via this input
 	if _try_activate_ability_by_input(event):
 		return
 	
-	# Mouse capturing
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		capture_mouse()
-	if Input.is_key_pressed(KEY_ESCAPE):
-		release_mouse()
+	# Handle mouse capture
+	_handle_mouse_capture()
 	
-	# Look around
+	# Handle look rotation
 	if mouse_captured and event is InputEventMouseMotion:
 		rotate_look(event.relative)
+		return
 	
-	# Toggle freefly mode
-	if can_freefly and Input.is_action_just_pressed(input_freefly):
-		if not freeflying:
-			enable_freefly()
-		else:
-			disable_freefly()
-		
-	# Block interaction (if no ability consumed input)
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.is_pressed():
+	# Handle freefly toggle
+	if _handle_freefly_toggle():
+		return
+	
+	# Handle block interaction
+	_handle_block_input(event)
+
+
+## Handles mouse capture/release logic.
+func _handle_mouse_capture() -> void:
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		capture_mouse()
+	elif Input.is_key_pressed(KEY_ESCAPE):
+		release_mouse()
+
+
+## Handles freefly mode toggle.
+## @return bool: True if toggle was handled.
+func _handle_freefly_toggle() -> bool:
+	if not can_freefly or not Input.is_action_just_pressed(input_freefly):
+		return false
+	
+	if freeflying:
+		disable_freefly()
+	else:
+		enable_freefly()
+	return true
+
+
+## Handles block placement and deletion input.
+func _handle_block_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton or not event.is_pressed():
+		return
+	
+	if event.button_index == MOUSE_BUTTON_RIGHT:
 		_handle_block_delete()
-				
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.is_pressed():
+	elif event.button_index == MOUSE_BUTTON_LEFT:
 		_handle_block_place()
 	
 
