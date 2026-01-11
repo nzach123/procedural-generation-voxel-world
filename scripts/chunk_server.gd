@@ -9,6 +9,7 @@ extends RefCounted
 
 # Explicit preload for static method access
 const VoxelDataGeneratorClass := preload("res://scripts/chunk/voxel_data_generator.gd")
+const ChunkCollisionBuilder := preload("res://scripts/chunk/chunk_collision_builder.gd")
 
 const WIDTH: int = 32
 const HEIGHT: int = 32
@@ -302,7 +303,7 @@ func _free_all_rids() -> void:
 	_free_physics_rids()
 
 
-## Builds collision from current mesh.
+## Builds collision from current mesh using ChunkCollisionBuilder.
 ## @param space: World3D physics space RID
 func _build_collision(space: RID) -> void:
 	_free_physics_rids()
@@ -310,40 +311,16 @@ func _build_collision(space: RID) -> void:
 	if _cached_mesh_arrays.is_empty():
 		return
 	
-	# Create trimesh shape from cached mesh arrays
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _cached_mesh_arrays)
-	_shape = mesh.create_trimesh_shape()
-	
-	if _shape == null:
-		return
-	
-	_shape_rid = _shape.get_rid()
-	
-	# Create static body
-	_body_rid = PhysicsServer3D.body_create()
-	PhysicsServer3D.body_set_mode(_body_rid, PhysicsServer3D.BODY_MODE_STATIC)
-	PhysicsServer3D.body_set_space(_body_rid, space)
-	PhysicsServer3D.body_add_shape(_body_rid, _shape_rid)
-	PhysicsServer3D.body_set_state(
-		_body_rid, 
-		PhysicsServer3D.BODY_STATE_TRANSFORM,
-		# Use IDENTITY because mesh vertices already have world offset baked in
-		# (see generate_mesh_arrays_threaded: pos := Vector3(x,y,z) + offset)
-		Transform3D.IDENTITY
+	var result := ChunkCollisionBuilder.build_collision(
+		_cached_mesh_arrays, space, collision_layer, collision_mask
 	)
 	
-	# Configure collision layers
-	PhysicsServer3D.body_set_collision_layer(_body_rid, collision_layer)
-	PhysicsServer3D.body_set_collision_mask(_body_rid, collision_mask)
+	_body_rid = result["body_rid"]
+	_shape_rid = result["shape_rid"]
+	_shape = result["shape"]
 	
-	# Force update to prevent "fall-through" on creation frame
-	# PhysicsServer3D.flush_queries() # Removed: Not available in Godot 4 API
-	
-	_collision_enabled = true
-	
-	# Note: PhysicsServer3D doesn't have body_set_user_data in Godot 4.5
-	# GrappleAbility will look up chunks via ChunkManager.get_chunk_at_world_pos() instead
+	if _body_rid.is_valid():
+		_collision_enabled = true
 
 
 # -- Private: Indexing --

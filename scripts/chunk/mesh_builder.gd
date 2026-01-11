@@ -114,3 +114,60 @@ static func to_mesh_data(arrays: Dictionary, triangle_count: int) -> Dictionary:
 		"indices": arrays.indices,
 		"triangle_count": triangle_count,
 	}
+
+
+## Builds mesh arrays from voxel data with visibility callback.
+## @param voxels: PackedByteArray of block IDs
+## @param chunk_offset: World position of chunk origin
+## @param chunk_color: Color tint for the chunk
+## @param is_transparent_callback: Callable(x,y,z)->bool for neighbor transparency checks
+## @param width: Chunk width (default 32)
+## @param height: Chunk height (default 32)
+## @param depth: Chunk depth (default 32)
+## @param tiles_per_row: Atlas tiles per row (default 2)
+## @return Dictionary: { arrays: Dictionary, triangle_count: int }
+static func build_from_voxels(
+	voxels: PackedByteArray,
+	chunk_offset: Vector3,
+	chunk_color: Color,
+	is_transparent_callback: Callable,
+	width: int = 32,
+	height: int = 32,
+	depth: int = 32,
+	tiles_per_row: int = 2
+) -> Dictionary:
+	var arrays := create_arrays()
+	var triangle_count: int = 0
+	var vertex_index: int = 0
+	
+	# Face neighbor offsets for visibility checks
+	var face_offsets := {
+		BlockDefinitions.Face.POS_X: Vector3i(1, 0, 0),
+		BlockDefinitions.Face.NEG_X: Vector3i(-1, 0, 0),
+		BlockDefinitions.Face.POS_Y: Vector3i(0, 1, 0),
+		BlockDefinitions.Face.NEG_Y: Vector3i(0, -1, 0),
+		BlockDefinitions.Face.POS_Z: Vector3i(0, 0, 1),
+		BlockDefinitions.Face.NEG_Z: Vector3i(0, 0, -1),
+	}
+	
+	for y in range(height):
+		for z in range(depth):
+			for x in range(width):
+				var idx: int = x + z * width + y * width * depth
+				var block_id: int = voxels[idx]
+				if block_id == 0:  # AIR_ID
+					continue
+				
+				var pos := Vector3(x, y, z) + chunk_offset
+				
+				# Check each face for visibility
+				for face in face_offsets:
+					var offset: Vector3i = face_offsets[face]
+					if is_transparent_callback.call(x + offset.x, y + offset.y, z + offset.z):
+						vertex_index += add_face(arrays, vertex_index, pos, face, block_id, chunk_color, tiles_per_row)
+						triangle_count += 2
+	
+	return {
+		"arrays": arrays,
+		"triangle_count": triangle_count,
+	}

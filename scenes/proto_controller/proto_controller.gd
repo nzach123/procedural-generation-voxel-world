@@ -3,6 +3,7 @@ extends CharacterBody3D
 
 # Explicit preload for static method access
 const BlockInteraction := preload("res://scenes/proto_controller/block_interaction.gd")
+const AbilitySystem := preload("res://scenes/proto_controller/ability_system.gd")
 
 @onready var raycast := $Head/Camera3D/RayCast3D
 @onready var cube_selected: Node3D = $"../CubeSelection"
@@ -69,8 +70,7 @@ var freeflying : bool = false
 @onready var collider: CollisionShape3D = $Collider
 var _last_collision_update_pos: Vector3 = Vector3.ZERO  ## For collision radius throttling
 
-var _abilities: Array[PlayerAbility] = []  ## Instantiated abilities (duped from templates)
-var _active_ability: PlayerAbility = null   ## Currently active ability
+var _ability_system: RefCounted = null  ## AbilitySystem component
 
 
 # -- Lifecycle --
@@ -87,17 +87,14 @@ func _ready() -> void:
 	if chunk_manager and chunk_manager.has_method("update_collision_radius"):
 		call_deferred("_initial_collision_update")
 	
-	# Initialize abilities with state isolation
-	_initialize_abilities()
+	# Initialize ability system
+	_ability_system = AbilitySystem.new()
+	_ability_system.initialize(self, ability_templates)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Delegate to active ability first
-	if _active_ability and _active_ability.input(event):
-		return
-	
-	# Check if any ability wants to activate via this input
-	if _try_activate_ability_by_input(event):
+	# Delegate to ability system
+	if _ability_system and _ability_system.handle_input(event):
 		return
 	
 	# Handle mouse capture
@@ -150,17 +147,12 @@ func _handle_block_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Delegate to active ability
-	if _active_ability:
-		_active_ability.physics_update(delta)
-	
-	# Update cooldowns on all abilities
-	for ability in _abilities:
-		if ability != _active_ability:
-			ability.physics_update(delta)
+	# Delegate to ability system
+	if _ability_system:
+		_ability_system.physics_update(delta)
 	
 	# If active ability is controlling movement, skip default movement
-	if _active_ability and _active_ability.is_active:
+	if _ability_system and _ability_system.is_active_controlling():
 		_update_block_selection()
 		_update_collision_radius()
 		return
@@ -220,102 +212,32 @@ func _process_ground_movement(delta: float) -> void:
 	move_and_slide()
 
 
-# -- Ability System --
-
-## Initialize abilities from templates with state isolation.
-func _initialize_abilities() -> void:
-	_abilities.clear()
-	for template in ability_templates:
-		if template:
-			var instance := template.create_instance()
-			_abilities.append(instance)
-
+# -- Ability System (Delegated) --
 
 ## Activate an ability by index.
-## @param index: Index into _abilities array.
-## @return bool: True if activation succeeded.
 func activate_ability(index: int) -> bool:
-	if index < 0 or index >= _abilities.size():
-		return false
-	
-	var ability := _abilities[index]
-	if not ability.is_ready():
-		return false  # On cooldown
-	
-	# Deactivate current ability if interruptible
-	if _active_ability:
-		if not _active_ability.interruptible:
-			return false
-		_disconnect_ability_signals(_active_ability)
-		_active_ability.exit()
-	
-	_active_ability = ability
-	_connect_ability_signals(_active_ability)
-	_active_ability.enter(self)
-	return true
+	return _ability_system.activate(index) if _ability_system else false
 
 
 ## Deactivate the current ability.
 func deactivate_ability() -> void:
-	if _active_ability:
-		_disconnect_ability_signals(_active_ability)
-		_active_ability.exit()
-		_active_ability = null
-
-
-## Called when active ability finishes (self-deactivates).
-func _on_ability_finished() -> void:
-	if _active_ability:
-		_disconnect_ability_signals(_active_ability)
-		_active_ability = null
-
-
-## Connect signals for an ability.
-func _connect_ability_signals(ability: PlayerAbility) -> void:
-	if not ability.ability_finished.is_connected(_on_ability_finished):
-		ability.ability_finished.connect(_on_ability_finished)
-
-
-## Disconnect signals for an ability.
-func _disconnect_ability_signals(ability: PlayerAbility) -> void:
-	if ability.ability_finished.is_connected(_on_ability_finished):
-		ability.ability_finished.disconnect(_on_ability_finished)
+	if _ability_system:
+		_ability_system.deactivate()
 
 
 ## Get the currently active ability (or null).
 func get_active_ability() -> PlayerAbility:
-	return _active_ability
+	return _ability_system.get_active() if _ability_system else null
 
 
 ## Get ability by index.
 func get_ability(index: int) -> PlayerAbility:
-	if index >= 0 and index < _abilities.size():
-		return _abilities[index]
-	return null
+	return _ability_system.get_ability(index) if _ability_system else null
 
 
 ## Get total number of abilities.
 func get_ability_count() -> int:
-	return _abilities.size()
-
-
-## Tries to activate an ability based on input event.
-## Checks each ability for an input action property and activates if matched.
-## @return bool: True if an ability was activated.
-func _try_activate_ability_by_input(event: InputEvent) -> bool:
-	for i in range(_abilities.size()):
-		var ability := _abilities[i]
-		
-		# Check if this ability has an activation input property
-		if ability.has_method("get") and ability.get("input_grapple") is String:
-			var action_name: String = ability.get("input_grapple")
-			if InputMap.has_action(action_name) and event.is_action_pressed(action_name):
-				if activate_ability(i):
-					# Also forward the input to the now-active ability
-					ability.input(event)
-					return true
-	
-	return false
+	return _ability_system.get_count() if _ability_system else 0
 
 
 # -- Look / Mouse --

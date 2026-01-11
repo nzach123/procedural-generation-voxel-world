@@ -139,37 +139,19 @@ func apply_mesh_arrays(mesh_data: Dictionary) -> void:
 	mesh_updated.emit(self, _triangle_count)
 
 
-## Builds the mesh from current voxel data using direct ArrayMesh.
+## Builds the mesh from current voxel data using MeshBuilder.
 func build_mesh() -> void:
-	var arrays := MeshBuilder.create_arrays()
-	_triangle_count = 0
-	var vertex_index: int = 0
+	var result := MeshBuilder.build_from_voxels(
+		_voxels,
+		chunk_offset,
+		chunk_color,
+		_is_transparent,
+		WIDTH, HEIGHT, DEPTH,
+		_tiles_per_row
+	)
 	
-	# Face neighbor offsets for visibility checks
-	var face_offsets := {
-		BlockDefinitions.Face.POS_X: Vector3i(1, 0, 0),
-		BlockDefinitions.Face.NEG_X: Vector3i(-1, 0, 0),
-		BlockDefinitions.Face.POS_Y: Vector3i(0, 1, 0),
-		BlockDefinitions.Face.NEG_Y: Vector3i(0, -1, 0),
-		BlockDefinitions.Face.POS_Z: Vector3i(0, 0, 1),
-		BlockDefinitions.Face.NEG_Z: Vector3i(0, 0, -1),
-	}
-	
-	for y in range(HEIGHT):
-		for z in range(DEPTH):
-			for x in range(WIDTH):
-				var block_id: int = get_voxel(x, y, z)
-				if block_id == AIR_ID:
-					continue
-				
-				var pos := Vector3(x, y, z) + chunk_offset
-				
-				# Check each face for visibility
-				for face in face_offsets:
-					var offset: Vector3i = face_offsets[face]
-					if _is_transparent(x + offset.x, y + offset.y, z + offset.z):
-						vertex_index += MeshBuilder.add_face(arrays, vertex_index, pos, face, block_id, chunk_color, _tiles_per_row)
-						_triangle_count += 2
+	var arrays: Dictionary = result["arrays"]
+	_triangle_count = result["triangle_count"]
 	
 	# Commit mesh
 	if arrays.verts.size() > 0:
